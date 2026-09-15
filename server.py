@@ -950,6 +950,24 @@ class H(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    def do_HEAD(self):
+        # HEAD 探测支持（此前未实现返回 501，部分客户端健康检查会失败）
+        p = urlparse(self.path).path
+        name = {"/": "index.html", "/index.html": "index.html",
+                "/weixin.html": "weixin.html"}.get(p)
+        f = os.path.join(os.path.dirname(os.path.abspath(__file__)), name) if name else ""
+        if f and os.path.exists(f):
+            n = len(open(f, "rb").read())
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(n))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        self.send_response(404)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_GET(self):
         p = urlparse(self.path).path
         cfg = load_cfg()
@@ -958,6 +976,13 @@ class H(BaseHTTPRequestHandler):
             if os.path.exists(f):
                 return self._send(200, open(f, encoding="utf-8").read(), "text/html; charset=utf-8")
             return self._send(404, "index.html not found", "text/plain; charset=utf-8")
+
+        # 微信精简版（自包含单页，零跨域请求）
+        if p == "/weixin.html":
+            f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weixin.html")
+            if os.path.exists(f):
+                return self._send(200, open(f, encoding="utf-8").read(), "text/html; charset=utf-8")
+            return self._send(404, "weixin.html not found", "text/plain; charset=utf-8")
 
         if p == "/api/models":
             out = []
