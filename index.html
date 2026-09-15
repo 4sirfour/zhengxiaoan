@@ -466,6 +466,7 @@ function renderTOC(){
     <div class="it" data-fee="1"><div class="r1">收费标准总表</div><div class="pr">点击查看</div></div>
     <div class="it" data-price="1"><div class="r1">各省报价表</div><div class="pr">${KB.quotes.length} 个省市</div></div>
     <div class="it" data-fee="1"><div class="r1">不可办理 / 受限事项</div><div class="pr">${KB.blocked.length-1} 项</div></div>
+    <div class="it" data-case="1"><div class="r1">案例与专项报价</div><div class="pr">${(KB.cases||[]).length} 个实操案例</div></div>
     </div></details>`;
   h += `<details class="grp"><summary>ℹ️ 平台介绍<small class="cnt"></small></summary><div class="body">
     ${KB.platform.map(p=>`<div class="it" data-plat="${esc(p.title)}"><div class="r1">${esc(p.title)}</div>
@@ -481,6 +482,7 @@ function bindTocClicks(){
       if(el.dataset.no){ showDetail(findItem(+el.dataset.no)); }
       else if(el.dataset.fee) showFee('fee');
       else if(el.dataset.price) showFee('price');
+      else if(el.dataset.case) showCases();
       else if(el.dataset.plat){ const p=KB.platform.find(x=>x.title===el.dataset.plat); if(p) pushMsg('a', p.content, {title:p.title}); }
       if(window.innerWidth<=900) $('#side').classList.remove('open');
     };
@@ -656,7 +658,20 @@ function showFee(kind){
   $('#feeMask').classList.add('show');
 }
 
-/* ---------- 配置 ---------- */
+/* 案例与专项报价清单 */
+function showCases(){
+  $('#feeTitle').textContent = '案例与专项报价';
+  let h = '<div class="warnbox">以下为业务实操案例与专项报价，供答复与报价参考；最终以公证处确认为准。</div>';
+  (KB.cases||[]).forEach(c=>{
+    h += `<div style="padding:12px 0;border-bottom:1px dashed #e5e7eb">
+      <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:6px">${esc(c.scene)}</div>
+      <div style="font-size:13px;color:#374151;line-height:1.75">${esc(c.detail)}</div>
+      <div style="font-size:13px;color:#b45309;margin-top:6px"><b>价格：</b>${esc(c.price)}</div>
+    </div>`;
+  });
+  $('#feeBody').innerHTML = h;
+  $('#feeMask').classList.add('show');
+}
 async function openCfg(){
   const c = await api('/api/config');
   const opts = MODELS.map(m=>`<option value="${m.id}" ${m.id===CUR_MODEL?'selected':''}>${esc(m.label)} — ${esc(m.desc)}</option>`).join('');

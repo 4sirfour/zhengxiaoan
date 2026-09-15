@@ -367,6 +367,7 @@ class H(BaseHTTPRequestHandler):
                                         "quotes": K.QUOTES, "quoteHeaders": K.QUOTE_HEADERS,
                                         "quoteNotes": K.QUOTE_NOTES,
                                         "feeTable": K.FEE_TABLE, "blocked": K.BLOCKED,
+                                        "cases": K.CASES,
                                         "admin": True,
                                         "stats": {"total": len(K.all_items()),
                                                   "ext": len(K.ext_items()),
