@@ -369,12 +369,26 @@ class H(BaseHTTPRequestHandler):
             q = (b.get("q") or "").strip()
             model = b.get("model") or cfg["defaultModel"]
             internal_view = bool(b.get("internalView"))
+            # 对话历史：[{role:"user"|"assistant", text:"..."}]
+            hist = [h for h in (b.get("history") or [])
+                    if isinstance(h, dict) and isinstance(h.get("text"), str) and h["text"].strip()]
+            hist = hist[-8:]  # 最多保留最近 4 轮
             if not q:
                 return self._send(400, {"error": "请输入问题"})
 
+            # ---- 四要素：当前问题 + 历史用户消息 合并判断 ----
+            # 某一要素只要在任何一轮中明确过，后续就不再追问
             four = extract_four(q)
+            hist_user_texts = [h["text"].strip() for h in hist if h.get("role") == "user"]
+            for t in hist_user_texts:
+                hf = extract_four(t)
+                for k, v in hf.items():
+                    four[k] = four[k] or v
             missing = [k for k, v in four.items() if not v]
-            hits = search(q, k=int(b.get("k") or cfg.get("topK", 4)),
+
+            # ---- 检索：当前问题 + 最近两轮用户输入，提升上下文命中率 ----
+            search_q = " ".join(hist_user_texts[-2:] + [q])
+            hits = search(search_q, k=int(b.get("k") or cfg.get("topK", 4)),
                           include_internal=internal_view)
 
             # ---- 仅知识库检索模式 ----
@@ -417,8 +431,18 @@ class H(BaseHTTPRequestHandler):
             if internal_view:
                 user += "\n\n（当前为管理员内部视图，可参考「对内/仅管理员」条目的结论，但答复当事人时须遵守对外口径。）"
 
-            ans, err = call_llm(model, [{"role": "system", "content": SYSTEM},
-                                        {"role": "user", "content": user}], cfg)
+            # 组装消息：system + 历史轮次 + 当前提问（模型可看到之前说过的要素）
+            msgs = [{"role": "system", "content": SYSTEM}]
+            for h in hist:
+                role = "user" if h.get("role") == "user" else "assistant"
+                txt = h["text"].strip()
+                if role == "assistant" and len(txt) > 600:
+                    txt = txt[:600] + "…（已截断）"
+                if txt:
+                    msgs.append({"role": role, "content": txt})
+            msgs.append({"role": "user", "content": user})
+
+            ans, err = call_llm(model, msgs, cfg)
             if err:
                 # 模型不可用时降级为知识库检索，保证服务可用
                 lines = [f"⚠️ {err}", "", "已自动降级为知识库检索结果：", ""]

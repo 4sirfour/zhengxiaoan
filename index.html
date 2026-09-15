@@ -429,6 +429,8 @@ $('#btnView').onclick = ()=>{
 };
 
 /* ---------- 聊天 ---------- */
+let HIST = [];  // 对话历史 [{role:'user'|'assistant', text}]，随请求发给后端做上下文
+
 function pushMsg(role, text, extra){
   $('#emptyState')?.remove();
   const d = document.createElement('div');
@@ -465,15 +467,20 @@ async function ask(text){
   if(BUSY || !text.trim()) return;
   BUSY = true; $('#send').disabled = true;
   pushMsg('u', text);
+  const hist = HIST.slice();  // 发送前的历史快照（不含当前这条）
+  HIST.push({role:'user', text});
   typing();
   try{
     const d = await api('/api/ask',{method:'POST',body:JSON.stringify({
-      q:text, model:CUR_MODEL, internalView:INTERNAL
+      q:text, model:CUR_MODEL, internalView:INTERNAL, history:hist
     })});
     $('#typing')?.remove();
+    HIST.push({role:'assistant', text:d.answer||''});
+    if(HIST.length > 12) HIST = HIST.slice(-12);  // 最多保留最近 6 轮
     const m = curModel();
     pushMsg('a', d.answer, {model:m.label, mode:d.mode, degraded:d.degraded,
       hits:d.hits, missing:d.missing});
+    if(d.four) paintF4(d.four);
   }catch(e){
     $('#typing')?.remove();
     pushMsg('a', '出错了：'+e.message);
@@ -489,8 +496,17 @@ $('#inp').addEventListener('input', ()=>{
   const t=$('#inp'); t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,140)+'px';
   syncF4();
 });
+function paintF4(four){
+  // 用服务器合并历史后的四要素结果渲染指示条（更准确）
+  $('#f4bar').innerHTML = FOUR_KEYS.map(k=>
+    `<span class="f ${four[k]?'on':'miss'}">${four[k]?'✓':'○'} ${k}</span>`).join('');
+  const miss = FOUR_KEYS.filter(k=>!four[k]).length;
+  $('#modeHint').textContent = miss ? `还缺 ${miss} 项要素` : '四要素已齐，可给完整分析';
+}
 function syncF4(){
-  const g = guessFour($('#inp').value);
+  // 实时提示 = 历史已明确的要素 + 当前输入框内容
+  const past = HIST.filter(h=>h.role==='user').map(h=>h.text).join(' ');
+  const g = guessFour(past + ' ' + $('#inp').value);
   $('#f4bar').innerHTML = g.map(x=>`<span class="f ${x.ok?'on':'miss'}">${x.ok?'✓':'○'} ${x.k}</span>`).join('');
   const miss = g.filter(x=>!x.ok).length;
   $('#modeHint').textContent = miss ? `还缺 ${miss} 项要素` : '四要素已齐，可给完整分析';
