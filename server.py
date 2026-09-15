@@ -148,12 +148,37 @@ for d in DOCS:
     d["_tk"] = tokenize(d["title"] + " " + d["content"])
 
 
+def _doc_weight(d):
+    """文档类型权重：具体事项条目 > 案例 > 平台类（总表/简介等）。
+    避免「收费标准总表」这类泛化长文档抢占具体条目的排序位。"""
+    i = d.get("id", "")
+    if i.startswith("item-"):
+        return 1.0
+    if i.startswith("case-"):
+        return 0.92
+    return 0.72  # plat-* / fee
+
+
+PRICE_WORDS = ("价格", "价钱", "多少钱", "费用", "收费", "报价", "怎么收", "多少", "价位", "贵不贵")
+
+
+def _is_platform_doc(d):
+    i = d.get("id", "")
+    return i.startswith("plat-") or i == "fee"
+
+
 def search(query, k=4, include_internal=True):
     qt = tokenize(query)
     if not qt:
         return []
+    # 平台类文档（收费标准总表、平台简介、办理流程）聚合了全部子项名，
+    # 命中词多、得分虚高，容易抢占具体事项条目的排序位。
+    # 因此仅在问题涉及「价格/费用」时才纳入平台类文档。
+    allow_platform = any(w in (query or "") for w in PRICE_WORDS)
     scored = []
     for d in DOCS:
+        if _is_platform_doc(d) and not allow_platform:
+            continue
         dt = d["_tk"]
         hit = qt & dt
         if not hit:
@@ -166,6 +191,8 @@ def search(query, k=4, include_internal=True):
         for t in hit:
             if len(t) >= 4 and t in d["content"]:
                 score *= 1.25
+        # 文档类型权重：具体条目优先于平台类泛化文档
+        score *= _doc_weight(d)
         scored.append((score, d))
     scored.sort(key=lambda x: -x[0])
     out = []
