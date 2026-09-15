@@ -632,7 +632,11 @@ class H(BaseHTTPRequestHandler):
                 # 若命中的只是「其他/一般」这类兜底桶，而司法部官方清单里
                 # 有该事项的专门条目，则优先采用官方专门条目（更权威、更具体），
                 # 同时保留桶条目作为背景参考。
-                if any(("其他" in h["title"] or "一般" in h["title"]) for h in hits[:1]):
+                # 注意只检查条目名本身（「·」之后），避免「九、其他」这类类目名误触发。
+                def _is_bucket(h):
+                    nm = h["title"].split("·")[-1]
+                    return "其他" in nm or "一般" in nm
+                if any(_is_bucket(h) for h in hits[:1]):
                     o_txt, o_ok = official_lookup(q)
                     if o_ok:
                         off_txt, off_ok = o_txt, o_ok
