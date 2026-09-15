@@ -153,8 +153,6 @@ def search(query, k=4, include_internal=True):
         return []
     scored = []
     for d in DOCS:
-        if not include_internal and d["mark"] == "int":
-            continue
         dt = d["_tk"]
         hit = qt & dt
         if not hit:
@@ -274,11 +272,16 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
 3. 输出结构：结论 → 依据（标注条目编号）→ 办理要素 → 材料清单 → 价格与时长 → 下一步
    （要素不全时先给「初步判断」，可用的结构类似，但必须有实质内容和依据）
 
+【办理状态口径】
+知识库每条事项都标注了办理状态：☑ 可办理（能受理）、☐ 不能办理（线上不受理或受限）。
+- 命中 ☑ 事项：给出结论、依据、办理要素、材料清单、价格、下一步
+- 命中 ☐ 事项：明确告知不能办理及原因，并指出替代方案（如继承公证线上办不了，可做放弃继承或委托继承）
+- 禁止把 ☐ 不能办理的事项说成可以办理
+
 【禁止】
 - 禁止只抛出追问、不给任何实质性分析内容
 - 禁止仅摘抄知识库原文片段作为回答
 - 禁止编造价格、材料清单、受理结论
-- 禁止把「对内/仅管理员」的事项当作可对外办理事项答复给当事人
 - 禁止追问当事人已经明确说过的要素
 - 知识库无依据时，必须明说「当前知识库未提供」，并建议补充文档或找负责人确认
 
@@ -290,7 +293,7 @@ def build_context(hits):
         return "（知识库未检索到相关条目）"
     parts = []
     for h in hits:
-        tag = "【可对外】" if h["mark"] == "ext" else "【对内/仅管理员】"
+        tag = "【☑ 可办理】" if h.get("ok", True) else "【☐ 不能办理】"
         parts.append(f"--- {tag} {h['title']} ---\n{h['content']}")
     return "\n\n".join(parts)
 
@@ -300,13 +303,12 @@ def kb_catalog(include_internal=False):
     seen = {}
     order = []
     for it in K.all_items():
-        if it["mark"] == "int" and not include_internal:
-            continue
         if it["cat"] not in seen:
             seen[it["cat"]] = []
             order.append(it["cat"])
-        price = (it.get("price") or "—").split("（")[0]
-        seen[it["cat"]].append(f"{it['no']}.{it['name']}（{price}）")
+        price = (it.get("price") or "").split("（")[0]
+        flag = "☑" if it["ok"] else "☐"
+        seen[it["cat"]].append(f"{flag}{it['no']}.{it['name']}" + (f"（{price}）" if price else ""))
     return "\n".join(f"{cat}：" + "；".join(seen[cat]) for cat in order)
 
 
@@ -361,12 +363,12 @@ class H(BaseHTTPRequestHandler):
             internal = qs.get("internal", ["0"])[0] in ("1", "true")
             rows = [r[:2] if len(r) > 2 else r for r in K.FEE_TABLE] if internal else K.FEE_TABLE
             base = {"kb": K.KB, "platform": K.PLATFORM,
-                    "feeTable": rows, "cases": K.CASES,
+                    "feeTable": rows, "cases": K.CASES, "limited": K.LIMITED,
                     "quoteHeaders": [], "quoteNotes": [], "quotes": [], "blocked": K.BLOCKED,
                     "admin": False,
                     "stats": {"total": len(K.all_items()),
-                              "ext": len(K.ext_items()),
-                              "int": len(K.int_items())}}
+                              "ok": len(K.ok_items()),
+                              "no": len(K.blocked_items())}}
             if internal:
                 passed = qs.get("pass", [""])[0] == cfg.get("adminPass")
                 if not passed:
@@ -397,7 +399,7 @@ class H(BaseHTTPRequestHandler):
             q = (b.get("q") or "").strip()
             hits = search(q, k=int(b.get("k") or cfg.get("topK", 4)),
                           include_internal=b.get("includeInternal", True))
-            return self._send(200, {"hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits]})
+            return self._send(200, {"hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits]})
 
         if p == "/api/ask":
             q = (b.get("q") or "").strip()
@@ -430,21 +432,21 @@ class H(BaseHTTPRequestHandler):
             if m and m["provider"] == "none":
                 if not hits:
                     ans = ("当前知识库未检索到与提问直接相关的条目。\n\n"
-                           "【可对外办理的全部事项目录】\n" + kb_catalog() +
+                           "【知识库全部事项目录】\n" + kb_catalog() +
                            "\n\n您可以从中指出想办的事项，或补充更多信息后再次提问。")
                     return self._send(200, {
                         "answer": ans, "four": four, "missing": missing,
                         "hits": [], "model": model, "mode": "kb"})
                 lines = ["【仅知识库检索 · 未启用模型分析】", ""]
                 for h in hits:
-                    tag = "可对外" if h["mark"] == "ext" else "对内/仅管理员"
+                    tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
                     lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) +
                                  "」，补齐后可给出更精准的判断（右上角切换到模型分析可获得完整解读）。")
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing,
-                                        "hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits],
+                                        "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                         "model": model, "mode": "kb"})
 
             # ---- 模型分析模式 ----
@@ -453,7 +455,7 @@ class H(BaseHTTPRequestHandler):
                 ask = "、".join(missing)
                 user = (f"当事人提问：{q}\n\n"
                         f"知识库检索到的相关条目：\n{build_context(hits)}\n\n"
-                        f"【知识库全部可对外事项目录】\n{kb_catalog()}\n\n"
+                        f"【知识库全部事项目录】\n{kb_catalog()}\n\n"
                         f"【四要素核对结果】\n"
                         f"- 当事人已明确：{'、'.join(have) if have else '（无）'}\n"
                         f"- 仍缺失：{ask}\n\n"
@@ -470,7 +472,7 @@ class H(BaseHTTPRequestHandler):
                         f"的结构给出完整分析，不要再追问任何要素。若涉及涉外，说明是否需要海牙认证。")
 
             if internal_view:
-                user += "\n\n（当前为管理员内部视图，可参考「对内/仅管理员」条目的结论，但答复当事人时须遵守对外口径。）"
+                user += "\n\n（当前为管理员视图，可参考完整结论与内部报价。）"
 
             # 组装消息：system + 历史轮次 + 当前提问（模型可看到之前说过的要素）
             msgs = [{"role": "system", "content": SYSTEM}]
@@ -488,17 +490,17 @@ class H(BaseHTTPRequestHandler):
                 # 模型不可用时降级为知识库检索，保证服务可用
                 lines = [f"⚠️ {err}", "", "已自动降级为知识库检索结果：", ""]
                 for h in hits:
-                    tag = "可对外" if h["mark"] == "ext" else "对内/仅管理员"
+                    tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
                     lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) + "」。")
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing, "degraded": True,
-                                        "hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits],
+                                        "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                         "model": model, "mode": "fallback"})
 
             return self._send(200, {"answer": ans, "four": four, "missing": missing,
-                                    "hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits],
+                                    "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                     "model": model, "mode": "llm"})
 
         if p == "/api/admin/login":

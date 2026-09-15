@@ -96,8 +96,9 @@
     display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;color:#fff}
   .cb.y{background:var(--ext);border-color:var(--ext)}
   .cb.n{background:#fff;border-color:#cbd5e1;color:transparent}
-  .it.int{background:#fffdf7;border-color:#f3e3c3}
-  .it.int:hover{border-color:var(--warn);background:var(--int-bg)}
+  .it.no{background:#fffdf7;border-color:#f3e3c3}
+  .it.no:hover{border-color:var(--warn);background:var(--int-bg)}
+  .it.no .r1{color:#6b7280}
 
   /* ---------- chat ---------- */
   main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -215,7 +216,7 @@
     <div class="model-menu" id="modelMenu"></div>
   </div>
 
-  <button class="hbtn" id="btnView" title="切换对外/对内视图">👁 当事人视图</button>
+  <button class="hbtn" id="btnView" title="切换当事人/管理员视图">👁 当事人视图</button>
   <button class="hbtn" id="btnCfg">⚙️ 配置</button>
 </header>
 
@@ -410,7 +411,7 @@ async function loadKB(){
     $('#btnView').classList.remove('on');
     $('#btnView').textContent = '👁 当事人视图';
   }
-  $('#kbStat').textContent = `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}`;
+  $('#kbStat').textContent = `共 ${KB.stats.total} 条 · ☑${KB.stats.ok} ☐${KB.stats.no}`;
   renderTOC();
 }
 function renderTOC(){
@@ -424,14 +425,14 @@ function renderTOC(){
       return blob.includes(q);
     });
     if(!items.length) return;
+    const nOk = items.filter(i=>i.ok).length;
     h += `<details class="grp" open><summary>${esc(g.cat)}
-      <span class="cnt">${items.length} 条</span></summary><div class="body">`;
+      <span class="cnt">${items.length} 条 · ☑${nOk} ☐${items.length-nOk}</span></summary><div class="body">`;
     items.forEach(it=>{
-      const isExt = it.mark==='ext';
-      h += `<div class="it ${isExt?'':'int'}" data-no="${it.no}">
-        <div class="r1"><span class="cb ${isExt?'y':'n'}">${isExt?'✓':''}</span>
+      h += `<div class="it ${it.ok?'':'no'}" data-no="${it.no}">
+        <div class="r1"><span class="cb ${it.ok?'y':'n'}">${it.ok?'✓':''}</span>
         <span class="pn">${it.no}.</span><span>${esc(it.name)}</span></div>
-        <div class="pr">${esc(it.price)} · ${isExt?'可对外':'对内 / 仅管理员'}</div></div>`;
+        <div class="pr">${it.price?esc(it.price)+' · ':''}${it.ok?'☑ 可办理':'☐ 不能办理'}</div></div>`;
     });
     h += '</div></details>';
   });
@@ -442,7 +443,7 @@ function renderTOC(){
   if(INTERNAL){  // 各省报价表为内部信息，仅管理员可见
     h += `<div class="it" data-price="1"><div class="r1">各省报价表</div><div class="pr">${KB.quotes.length} 个省市</div></div>`;
   }
-  h += `<div class="it" data-fee="1"><div class="r1">不可办理 / 受限事项</div><div class="pr">${KB.blocked.length-1} 项</div></div>`;
+  h += `<div class="it" data-fee="1"><div class="r1">不能办理 / 受限事项</div><div class="pr">${KB.blocked.length-1} 项</div></div>`;
   if(INTERNAL){
     h += `<div class="it" data-case="1"><div class="r1">案例与专项报价</div><div class="pr">${(KB.cases||[]).length} 个实操案例</div></div>`;
   }
@@ -471,13 +472,15 @@ function bindTocClicks(){
 let DET_IT = null;
 function showDetail(it){
   DET_IT = it;
-  const isExt = it.mark==='ext';
   $('#detTitle').textContent = `${it.no}. ${it.name}`;
-  const badge = `<span class="cb ${isExt?'y':'n'}" style="display:inline-block;margin-right:6px">${isExt?'✓ 可对外':'☐ 对内 / 仅管理员'}</span>`;
+  const badge = `<span class="cb ${it.ok?'y':'n'}" style="display:inline-block;margin-right:6px">${it.ok?'✓ ☑ 可办理':'☐ 不能办理'}</span>`;
   let h = `<div style="padding:14px 18px 6px">${badge}
     <span style="color:#6b7280;font-size:13px">${esc(it.price||'')}</span></div>
     <div style="padding:4px 18px 10px">`;
-  (it.fields||[]).forEach(f=>{ h += `<div class="drow"><div class="dk">${esc(f[0])}</div><div class="dv">${esc(f[1])}</div></div>`; });
+  (it.fields||[]).forEach(f=>{
+    const v = f[1] || '（待补充）';
+    h += `<div class="drow"><div class="dk">${esc(f[0])}</div><div class="dv">${esc(v)}</div></div>`;
+  });
   h += '</div>';
   $('#detBody').innerHTML = h;
   $('#detMask').classList.add('show');
@@ -500,7 +503,7 @@ $('#btnView').onclick = ()=>{
     INTERNAL = false;
     $('#btnView').classList.remove('on');
     $('#btnView').textContent = '👁 当事人视图';
-    $('#modeHint').textContent = '当事人视图：仅显示可对外事项';
+    $('#modeHint').textContent = '当事人视图：全部目录可见';
     loadKB();
   }
 };
@@ -515,7 +518,7 @@ async function tryAdminLogin(){
     $('#pwMask').classList.remove('show');
     $('#btnView').classList.add('on');
     $('#btnView').textContent = '🔓 管理员视图';
-    $('#modeHint').textContent = '内部视图：含对内条目';
+    $('#modeHint').textContent = '管理员视图：含各省报价与案例';
     await loadKB();
   }catch(e){
     $('#pwErr').textContent = '密码错误，请重试';
@@ -543,7 +546,7 @@ function pushMsg(role, text, extra){
     let src = '';
     if(extra.hits&&extra.hits.length){
       src = '<div class="srcs">依据来源：' + extra.hits.map(h=>
-        `<span class="s">· ${esc(h.title)}${h.mark==='int'?'［对内］':''}</span>`).join('') + '</div>';
+        `<span class="s">· ${esc(h.title)}${h.ok===false?'［不能办理］':''}</span>`).join('') + '</div>';
     }
     inner += (m?`<div class="meta">${m}</div>`:'') + src;
   }
