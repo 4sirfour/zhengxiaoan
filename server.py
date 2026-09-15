@@ -665,6 +665,14 @@ class H(BaseHTTPRequestHandler):
                 lines = ["【仅知识库检索 · 未启用模型分析】", ""]
                 for h in hits:
                     tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
+                    if h.get("id") == "fee":
+                        # 收费总表内容过长，仅知识库模式下只给概览，不整表铺开
+                        lines.append(f"■ {h['title']}［{tag}］\n"
+                                     "（收费总表内容较多，此处仅列概览；"
+                                     "切换到模型分析可获取与您问题相关的具体价格）\n"
+                                     + "\n".join(l.split("；明细：")[0]
+                                                 for l in h["content"].split("\n")) + "\n")
+                        continue
                     lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) +
