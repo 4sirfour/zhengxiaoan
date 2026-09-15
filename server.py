@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 import kb_data as K
+import kb_official as O
 
 # ==================== 模型注册表 ====================
 # 每组含：id / 名称 / 供应商 / 模型名 / 默认端点 / 是否免费 / 说明
@@ -167,7 +168,96 @@ def search(query, k=4, include_internal=True):
                 score *= 1.25
         scored.append((score, d))
     scored.sort(key=lambda x: -x[0])
-    return [d for _, d in scored[:k]]
+    out = []
+    for s, d in scored[:k]:
+        d2 = dict(d)
+        d2["_score"] = s
+        out.append(d2)
+    return out
+
+
+GENERIC_WORDS = {
+    "公证", "办理", "申请", "需要", "什么", "材料", "如何", "怎么", "可以", "是否",
+    "请问", "我想", "我要", "户籍", "使用", "用途", "用于", "国内", "国外", "境外",
+}
+
+# 事项名中常见但无区分度的「类型后缀」：剥离后剩下的才是事项的「核心业务词」。
+# 若只命中这些后缀（如「声明」「协议」），不能算知识库收录了该事项。
+SUFFIX_WORDS = (
+    "公证", "证明", "声明", "协议", "合同", "书", "文件", "事项", "服务",
+)
+
+
+def _core_subject(name):
+    """取事项名的核心业务词：去掉编号、大类前缀与类型后缀。"""
+    n = (name or "").strip().split("·")[-1].strip()
+    n = re.sub(r"^\d+[\.、]\s*", "", n)               # 去「17. 」「17、」
+    n = re.sub(r"^[（(][^）)]*[）)]", "", n)          # 去「（美国护照申请）」等前缀括号
+    n = re.sub(r"[（(][^）)]*[）)]", "", n)            # 去正文中的补充括号
+    n = re.sub(r"^(涉外的?|国内的?)", "", n)          # 去高频通用前缀
+    for s in SUFFIX_WORDS:
+        n = n.replace(s, "")
+    return n.strip(" 、，,-—")
+
+
+def hit_is_relevant(query, items):
+    """判断检索结果是否真正相关：必须命中「事项核心词」或该事项的「别名」。
+
+    仅命中「公证/办理/材料」等通用词，或只命中「声明/协议」这类类型后缀，
+    都不算命中，否则会把不相关事项的材料带出来。
+    例外：若首位结果得分远超其余（强区分），且核心词与问题有 ≥3 字公共片段，
+    也视为命中（应对「公众号主体迁移」vs「微信公众号主体迁移」这类近义表述）。
+    """
+    q = (query or "").strip()
+    if not q:
+        return False
+    # 规则0：问题里出现某事项的别名（如「委托买房」→ 1 房屋车辆买卖委托），
+    #        视为直接命中，这是最贴近用户口语的信号
+    for alias, no in K.ALIAS_INDEX.items():
+        if len(alias) >= 3 and alias in q:
+            if any(d.get("no") == no for d in items):
+                return True
+    q_tokens = {t for t in tokenize(q) if len(t) >= 2 and t not in GENERIC_WORDS}
+    for idx, d in enumerate(items):
+        name = d.get("title", "")
+        core = _core_subject(name)
+        if len(core) < 2:
+            continue
+        # 规则0.5：该事项有别名被问题直接命中
+        for alias in K.ALIAS.get(d.get("no"), []):
+            if len(alias) >= 3 and alias in q:
+                return True
+        # 规则1：事项核心词整体出现在问题里（最强信号）
+        if core in q:
+            return True
+        # 规则2：核心词被拆成 ≥2 字的片段，片段出现在问题里，
+        #        且该片段本身不是通用词/类型后缀
+        frags = [s for s in re.split(r"[、，,/\s]+", core) if len(s) >= 2]
+        if any(f in q for f in frags):
+            return True
+        # 规则3：问题中的 token 命中核心词，且该 token 覆盖核心词 ≥60%，
+        #        或 token 长度 ≥3 且为核心词开头。
+        #        长度门槛用于过滤「公司」「转让」这类 2 字泛词造成的跨界误判
+        #        （如「公司章程」命中「公司股权协议」、「国有土地转让」命中「转让股权」）。
+        for t in q_tokens:
+            if len(t) < 2 or t not in core:
+                continue
+            if len(t) * 5 >= len(core) * 3:
+                return True
+            if len(t) >= 3 and core.startswith(t):
+                return True
+        # 规则4：首位结果得分压倒性领先，且核心词与问题存在 ≥3 字公共子串
+        #        （应对「公众号主体迁移」vs「微信公众号主体迁移」这类近义表述；
+        #        要求 ≥3 字是为了避免「转让」这种 2 字泛词误判成同一事项）
+        if idx == 0 and len(items) > 1:
+            top = items[0].get("_score", 0)
+            nxt = max((x.get("_score", 0) for x in items[1:]), default=0)
+            if top >= 5.0 and top >= nxt * 8:
+                for i in range(len(core) - 2):
+                    seg = core[i:i + 3]
+                    if seg in q and seg not in GENERIC_WORDS:
+                        return True
+    return False
 
 
 # ==================== 四要素抽取 ====================
@@ -278,12 +368,22 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
 - 命中 ☐ 事项：明确告知不能办理及原因，并指出替代方案（如继承公证线上办不了，可做放弃继承或委托继承）
 - 禁止把 ☐ 不能办理的事项说成可以办理
 
+【依据来源优先级】
+1. 优先用「知识库检索到的相关条目」作答，标注条目编号。
+2. 知识库未收录该事项时，用「司法部官方证明材料清单」作答，标注来源为司法部官方清单；这是权威口径。
+3. 官方清单也没有时，用「网络检索结果」作答，并明确标注来自网络检索、仅供参考、须以使用地公证处口径为准。
+4. 以上都没有时，才说明「当前知识库未提供」，并建议补充文档或联系负责人确认。
+
+【严禁跨条目挪用材料】
+- 材料清单只能取自：①当事人所问事项对应的知识库条目；②司法部官方清单中同一事项；③网络检索结果中同一事项。
+- 严禁把 A 事项的材料（如户口本公证、亲属关系公证、房屋委托公证的材料）安到 B 事项上。
+- 若所列来源均无该事项材料，必须明确说「该项材料暂未收录」，不得凭常识编造，也不得用其他事项材料凑数。
+
 【禁止】
 - 禁止只抛出追问、不给任何实质性分析内容
 - 禁止仅摘抄知识库原文片段作为回答
 - 禁止编造价格、材料清单、受理结论
 - 禁止追问当事人已经明确说过的要素
-- 知识库无依据时，必须明说「当前知识库未提供」，并建议补充文档或找负责人确认
 
 【语气】专业、直接、给结论，不绕弯。"""
 
@@ -296,6 +396,83 @@ def build_context(hits):
         tag = "【☑ 可办理】" if h.get("ok", True) else "【☐ 不能办理】"
         parts.append(f"--- {tag} {h['title']} ---\n{h['content']}")
     return "\n\n".join(parts)
+
+
+# ==================== 网络检索兜底 ====================
+WEB_CACHE = {}
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+
+def _bing_parse(html, limit=5):
+    """解析必应搜索结果（标题 + 摘要）"""
+    items = re.findall(r'<li class="b_algo".*?</li>', html, re.S)
+    out = []
+    for it in items[:limit]:
+        mt = re.search(r'<h2[^>]*>(.*?)</h2>', it, re.S)
+        mc = re.search(r'<p[^>]*>(.*?)</p>', it, re.S)
+        t = re.sub(r"<[^>]+>", "", mt.group(1)).strip() if mt else ""
+        c = re.sub(r"<[^>]+>", "", mc.group(1)).strip() if mc else ""
+        c = c.replace("&quot;", '"').replace("&amp;", "&").replace("&ensp;", " ")
+        if t and len(t) > 4:
+            out.append({"title": t, "snippet": c})
+    return out
+
+
+def official_lookup(query):
+    """知识库未收录时，查司法部官方《公证事项证明材料清单》底库。
+    返回 (文本, 是否命中)。这是权威来源，优先于网络检索。"""
+    q = (query or "").strip()
+    if not q:
+        return "", False
+    # 先在官方底库中按关键词匹配（取最长命中）
+    hit = None
+    for key in sorted(O.OFFICIAL.keys(), key=len, reverse=True):
+        if key in q:
+            hit = O.OFFICIAL[key]
+            break
+    if not hit:
+        hit = O.lookup(q)
+    if not hit:
+        return "", False
+    mats = "\n".join(f"  {i}. {m}" for i, m in enumerate(hit["materials"], 1))
+    return (f"【司法部官方证明材料清单 · {hit['name']}】\n{mats}"), True
+
+
+def web_search(query, limit=5, timeout=9):
+    """网络检索补充（必应中文）。返回 (文本, 是否成功)"""
+    q = (query or "").strip()
+    if not q:
+        return "", False
+    if q in WEB_CACHE:
+        return WEB_CACHE[q], bool(WEB_CACHE[q])
+    try:
+        import urllib.parse
+        url = ("https://cn.bing.com/search?q=" + urllib.parse.quote(q)
+               + "&setlang=zh-CN&ensearch=0")
+        req = urllib.request.Request(url, headers={"User-Agent": UA,
+                                                   "Accept-Language": "zh-CN,zh;q=0.9"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            html = r.read().decode("utf-8", "ignore")
+        res = _bing_parse(html, limit)
+        # 质量过滤：剔除词典/翻译类噪声结果
+        noise = ("词典", "翻译", "读音", "的意思", "百科", "是什么意思", "音标", "例句")
+        res = [x for x in res if not any(n in x["title"] for n in noise)]
+        if not res:
+            WEB_CACHE[q] = ""
+            return "", False
+        lines = []
+        for i, it in enumerate(res, 1):
+            lines.append(f"{i}. {it['title']}")
+            if it["snippet"]:
+                lines.append(f"   摘要：{it['snippet'][:180]}")
+        txt = ("【网络检索结果 · 仅供参考，最终以使用地公证处口径为准】\n"
+               + "\n".join(lines))
+        WEB_CACHE[q] = txt
+        return txt, True
+    except Exception as e:
+        WEB_CACHE[q] = ""
+        return f"（网络检索未成功：{e}）", False
 
 
 def kb_catalog(include_internal=False):
@@ -424,19 +601,63 @@ class H(BaseHTTPRequestHandler):
 
             # ---- 检索：当前问题 + 最近两轮用户输入，提升上下文命中率 ----
             search_q = " ".join(hist_user_texts[-2:] + [q])
-            hits = search(search_q, k=int(b.get("k") or cfg.get("topK", 4)),
-                          include_internal=internal_view)
+            topk = int(b.get("k") or cfg.get("topK", 4))
+            hits = search(search_q, k=topk, include_internal=internal_view)
+            # 相关度判定：必须命中「事项级特征词」才算知识库有对应条目，
+            # 否则视为未收录 → 走官方底库/网络兜底，避免挪用其他事项材料
+            strong_hits = [h for h in hits if h.get("_score", 0) >= 1.0]
+            kb_ok = bool(hits) and hit_is_relevant(q, hits) and bool(strong_hits)
+            if not kb_ok:
+                # 二次召回：默认 topK 偏小，像「身份证、户口本、护照…」这类
+                # 多主题条目容易被挤出。扩大召回范围后再判一次，避免误判为未收录。
+                # 但必须要求「宽召回的首位」本身相关且得分足够，否则会把
+                # 弱相关条目（如「公司」→「公司股权协议」）也当成本事项目。
+                wider = search(search_q, k=max(topk * 6, 24), include_internal=internal_view)
+                w_strong = [h for h in wider if h.get("_score", 0) >= 1.0]
+                if (w_strong and hit_is_relevant(q, w_strong[:2])
+                        and w_strong[0].get("_score", 0) >= 2.0):
+                    hits = w_strong[:topk]
+                    strong_hits = hits
+                    kb_ok = True
+            off_txt, off_ok = "", False
+            web_txt, web_ok = "", False
+            if not kb_ok:
+                # 知识库无对应条目 → 先查司法部官方材料底库，再补网络检索；
+                # 严禁挪用其他条目的材料
+                hits = []
+                off_txt, off_ok = official_lookup(q)
+                web_txt, web_ok = web_search(f"{q} 公证 所需材料 办理", limit=4)
+            else:
+                hits = strong_hits
+                # 若命中的只是「其他/一般」这类兜底桶，而司法部官方清单里
+                # 有该事项的专门条目，则优先采用官方专门条目（更权威、更具体），
+                # 同时保留桶条目作为背景参考。
+                if any(("其他" in h["title"] or "一般" in h["title"]) for h in hits[:1]):
+                    o_txt, o_ok = official_lookup(q)
+                    if o_ok:
+                        off_txt, off_ok = o_txt, o_ok
 
             # ---- 仅知识库检索模式 ----
             m = next((x for x in MODELS if x["id"] == model), None)
             if m and m["provider"] == "none":
                 if not hits:
-                    ans = ("当前知识库未检索到与提问直接相关的条目。\n\n"
-                           "【知识库全部事项目录】\n" + kb_catalog() +
-                           "\n\n您可以从中指出想办的事项，或补充更多信息后再次提问。")
+                    if off_ok or web_ok:
+                        parts = ["【仅知识库检索 · 未启用模型分析】\n",
+                                 "当前知识库未收录该事项，以下是权威/网络检索到的相关信息：\n"]
+                        if off_ok: parts.append(off_txt + "\n")
+                        if web_ok: parts.append(web_txt + "\n")
+                        parts.append("如需完整分析，请右上角切换到模型分析；"
+                                     "或从下方目录指出想办的事项。\n\n"
+                                     "【知识库全部事项目录】\n" + kb_catalog())
+                        ans = "\n".join(parts)
+                    else:
+                        ans = ("当前知识库未检索到与提问直接相关的条目，官方底库与网络检索也未取得有效结果。\n\n"
+                               "【知识库全部事项目录】\n" + kb_catalog() +
+                               "\n\n您可以从中指出想办的事项，或补充更多信息后再次提问。")
                     return self._send(200, {
                         "answer": ans, "four": four, "missing": missing,
-                        "hits": [], "model": model, "mode": "kb"})
+                        "hits": [], "model": model, "mode": "kb",
+                        "official": off_ok, "web": web_ok})
                 lines = ["【仅知识库检索 · 未启用模型分析】", ""]
                 for h in hits:
                     tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
@@ -451,10 +672,18 @@ class H(BaseHTTPRequestHandler):
 
             # ---- 模型分析模式 ----
             have = [k for k, v in four.items() if v]
+            blocks = []
+            if off_ok:
+                blocks.append(off_txt)
+            if web_ok:
+                blocks.append(web_txt)
+            if not kb_ok and not blocks:
+                blocks.append("（知识库无对应条目，官方底库与网络检索也未取得有效结果）")
+            web_block = ("\n\n" + "\n\n".join(blocks)) if blocks else ""
             if missing:
                 ask = "、".join(missing)
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{web_block}\n\n"
                         f"【知识库全部事项目录】\n{kb_catalog()}\n\n"
                         f"【四要素核对结果】\n"
                         f"- 当事人已明确：{'、'.join(have) if have else '（无）'}\n"
@@ -463,10 +692,12 @@ class H(BaseHTTPRequestHandler):
                         f"1. 先基于已明确的要素，对照检索条目与事项目录，把当前能确定的分析直接给出来"
                         f"（可能适用的事项、价格、材料、限制条件、已可下的初步结论）；\n"
                         f"2. 若缺失的要素会导向不同结论，用「若…则…」简要分情况说明；\n"
-                        f"3. 最后用一两句话请当事人补充仍缺失的要素（{ask}），不要展开长篇追问。")
+                        f"3. 最后用一两句话请当事人补充仍缺失的要素（{ask}），不要展开长篇追问。\n"
+                        f"注意：材料清单只能取自当事人所问事项对应的条目，严禁挪用其他事项的材料；"
+                        f"该事项无材料信息时，明说「知识库暂未收录」，可引用网络结果并标注来源。")
             else:
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{web_block}\n\n"
                         f"【四要素核对结果】\n办什么公证、户籍在哪儿、在哪儿使用、用途是什么 —— 四项均已明确。\n\n"
                         f"请直接按「结论 → 依据 → 办理要素 → 材料清单 → 价格与时长 → 下一步」"
                         f"的结构给出完整分析，不要再追问任何要素。若涉及涉外，说明是否需要海牙认证。")
@@ -487,19 +718,29 @@ class H(BaseHTTPRequestHandler):
 
             ans, err = call_llm(model, msgs, cfg)
             if err:
-                # 模型不可用时降级为知识库检索，保证服务可用
-                lines = [f"⚠️ {err}", "", "已自动降级为知识库检索结果：", ""]
-                for h in hits:
-                    tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
-                    lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
+                # 模型不可用时降级为知识库检索 / 网络检索，保证服务可用
+                lines = [f"⚠️ {err}", "", "已自动降级为检索结果：", ""]
+                if hits:
+                    for h in hits:
+                        tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
+                        lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
+                elif off_ok:
+                    lines.append(off_txt + "\n")
+                    if web_ok: lines.append(web_txt + "\n")
+                elif web_ok:
+                    lines.append(web_txt + "\n")
+                else:
+                    lines.append("知识库、官方底库与网络检索均未取得有效结果，建议补充文档或联系负责人确认。\n")
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) + "」。")
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing, "degraded": True,
+                                        "official": (not hits and off_ok), "web": (not hits and web_ok),
                                         "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                         "model": model, "mode": "fallback"})
 
             return self._send(200, {"answer": ans, "four": four, "missing": missing,
+                                    "official": (not hits and off_ok), "web": (not hits and web_ok),
                                     "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                     "model": model, "mode": "llm"})
 
