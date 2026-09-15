@@ -355,32 +355,25 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"models": out, "default": cfg["defaultModel"]})
 
         if p == "/api/kb":
-            # 权限控制：默认（当人口径）返回可对外条目 + 收费标准总表；
-            # 对内事项、各省报价、受限清单仅管理员可见（需密码校验）
+            # 权限控制：目录与条目详情对所有人可见；
+            # 仅「各省报价表」为内部信息，需管理员密码；收费总表对外可见（无价格留空）
             qs = parse_qs(urlparse(self.path).query)
             internal = qs.get("internal", ["0"])[0] in ("1", "true")
+            rows = [r[:2] if len(r) > 2 else r for r in K.FEE_TABLE] if internal else K.FEE_TABLE
+            base = {"kb": K.KB, "platform": K.PLATFORM,
+                    "feeTable": rows, "cases": K.CASES,
+                    "quoteHeaders": [], "quoteNotes": [], "quotes": [], "blocked": K.BLOCKED,
+                    "admin": False,
+                    "stats": {"total": len(K.all_items()),
+                              "ext": len(K.ext_items()),
+                              "int": len(K.int_items())}}
             if internal:
                 passed = qs.get("pass", [""])[0] == cfg.get("adminPass")
                 if not passed:
                     return self._send(401, {"error": "管理员密码错误"})
-                return self._send(200, {"kb": K.KB, "platform": K.PLATFORM,
-                                        "quotes": K.QUOTES, "quoteHeaders": K.QUOTE_HEADERS,
-                                        "quoteNotes": K.QUOTE_NOTES,
-                                        "feeTable": K.FEE_TABLE, "blocked": K.BLOCKED,
-                                        "cases": K.CASES,
-                                        "admin": True,
-                                        "stats": {"total": len(K.all_items()),
-                                                  "ext": len(K.ext_items()),
-                                                  "int": len(K.int_items())}})
-            kb_pub = [{"cat": g["cat"],
-                       "items": [dict(it) for it in g["items"] if it["mark"] == "ext"]}
-                      for g in K.KB]
-            return self._send(200, {"kb": kb_pub, "platform": K.PLATFORM,
-                                    "quotes": [], "quoteHeaders": [], "quoteNotes": [],
-                                    "feeTable": K.FEE_TABLE, "blocked": [],
-                                    "admin": False,
-                                    "stats": {"total": len(K.ext_items()),
-                                              "ext": len(K.ext_items()), "int": 0}})
+                base.update({"quotes": K.QUOTES, "quoteHeaders": K.QUOTE_HEADERS,
+                             "quoteNotes": K.QUOTE_NOTES, "admin": True})
+            return self._send(200, base)
 
         if p == "/api/config":
             provs = {}

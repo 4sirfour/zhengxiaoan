@@ -410,35 +410,11 @@ async function loadKB(){
     $('#btnView').classList.remove('on');
     $('#btnView').textContent = '👁 当事人视图';
   }
-  $('#kbStat').textContent = INTERNAL ? `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}` : `${KB.stats.ext} 条对外事项`;
+  $('#kbStat').textContent = `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}`;
   renderTOC();
 }
 function renderTOC(){
-  // 当事人视图：展示可对外条目与收费标准；对内事项/各省报价/受限清单不出现
-  if(!INTERNAL){
-    const q = $('#q').value.trim().toLowerCase();
-    let h = '';
-    KB.kb.forEach(g=>{
-      const items = g.items.filter(it=> !q || (g.cat+it.name+(it.fields||[]).map(f=>f[0]+f[1]).join('')).toLowerCase().includes(q));
-      if(!items.length) return;
-      h += `<details class="grp" open><summary>${esc(g.cat)}
-        <span class="cnt">${items.length} 条</span></summary><div class="body">`;
-      items.forEach(it=>{
-        h += `<div class="it" data-no="${it.no}">
-          <div class="r1"><span class="pn">${it.no}.</span><span>${esc(it.name)}</span></div>
-          <div class="pr">${esc(it.price)}</div></div>`;
-      });
-      h += '</div></details>';
-    });
-    if(KB.feeTable && KB.feeTable.length){
-      h += `<details class="grp" open><summary>📋 收费标准<small class="cnt"></small></summary><div class="body">
-        <div class="it" data-fee="1"><div class="r1">收费标准总表</div><div class="pr">点击查看</div></div>
-        </div></details>`;
-    }
-    $('#toc').innerHTML = h || '<div style="padding:20px;color:#6b7280;font-size:13px">没有匹配的条目</div>';
-    bindTocClicks();
-    return;
-  }
+  // 目录与条目对所有人可见；仅各省报价表为内部信息
   const q = $('#q').value.trim().toLowerCase();
   let h = '';
   KB.kb.forEach(g=>{
@@ -452,8 +428,7 @@ function renderTOC(){
       <span class="cnt">${items.length} 条</span></summary><div class="body">`;
     items.forEach(it=>{
       const isExt = it.mark==='ext';
-      const dim = (!INTERNAL && !isExt);
-      h += `<div class="it ${isExt?'':'int'}" data-no="${it.no}" ${dim?'style="opacity:.55"':''}>
+      h += `<div class="it ${isExt?'':'int'}" data-no="${it.no}">
         <div class="r1"><span class="cb ${isExt?'y':'n'}">${isExt?'✓':''}</span>
         <span class="pn">${it.no}.</span><span>${esc(it.name)}</span></div>
         <div class="pr">${esc(it.price)} · ${isExt?'可对外':'对内 / 仅管理员'}</div></div>`;
@@ -463,11 +438,15 @@ function renderTOC(){
 
   // 平台与工具
   h += `<details class="grp" open><summary>📋 平台与收费<small class="cnt"></small></summary><div class="body">
-    <div class="it" data-fee="1"><div class="r1">收费标准总表</div><div class="pr">点击查看</div></div>
-    <div class="it" data-price="1"><div class="r1">各省报价表</div><div class="pr">${KB.quotes.length} 个省市</div></div>
-    <div class="it" data-fee="1"><div class="r1">不可办理 / 受限事项</div><div class="pr">${KB.blocked.length-1} 项</div></div>
-    <div class="it" data-case="1"><div class="r1">案例与专项报价</div><div class="pr">${(KB.cases||[]).length} 个实操案例</div></div>
-    </div></details>`;
+    <div class="it" data-fee="1"><div class="r1">收费标准总表</div><div class="pr">点击查看</div></div>`;
+  if(INTERNAL){  // 各省报价表为内部信息，仅管理员可见
+    h += `<div class="it" data-price="1"><div class="r1">各省报价表</div><div class="pr">${KB.quotes.length} 个省市</div></div>`;
+  }
+  h += `<div class="it" data-fee="1"><div class="r1">不可办理 / 受限事项</div><div class="pr">${KB.blocked.length-1} 项</div></div>`;
+  if(INTERNAL){
+    h += `<div class="it" data-case="1"><div class="r1">案例与专项报价</div><div class="pr">${(KB.cases||[]).length} 个实操案例</div></div>`;
+  }
+  h += `</div></details>`;
   h += `<details class="grp"><summary>ℹ️ 平台介绍<small class="cnt"></small></summary><div class="body">
     ${KB.platform.map(p=>`<div class="it" data-plat="${esc(p.title)}"><div class="r1">${esc(p.title)}</div>
     <div class="pr">${esc(p.content.slice(0,26))}…</div></div>`).join('')}
@@ -494,9 +473,7 @@ function showDetail(it){
   DET_IT = it;
   const isExt = it.mark==='ext';
   $('#detTitle').textContent = `${it.no}. ${it.name}`;
-  const badge = INTERNAL
-    ? `<span class="cb ${isExt?'y':'n'}" style="display:inline-block;margin-right:6px">${isExt?'✓ 可对外':'☐ 对内 / 仅管理员'}</span>`
-    : '';
+  const badge = `<span class="cb ${isExt?'y':'n'}" style="display:inline-block;margin-right:6px">${isExt?'✓ 可对外':'☐ 对内 / 仅管理员'}</span>`;
   let h = `<div style="padding:14px 18px 6px">${badge}
     <span style="color:#6b7280;font-size:13px">${esc(it.price||'')}</span></div>
     <div style="padding:4px 18px 10px">`;
@@ -635,6 +612,7 @@ document.querySelectorAll('.chip').forEach(c=> c.onclick = ()=>{ $('#inp').value
 /* ---------- 收费 / 报价 ---------- */
 function showFee(kind){
   if(kind==='price'){
+    if(!KB.quotes || !KB.quotes.length){ return; }  // 非管理员无报价数据
     $('#feeTitle').textContent='各省报价表';
     let h = `<div class="warnbox">${KB.quoteNotes.map(n=>'· '+esc(n)).join('<br>')}</div>`;
     h += '<table class="qt"><tr>'+KB.quoteHeaders.map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
@@ -646,7 +624,7 @@ function showFee(kind){
     $('#feeTitle').textContent='收费标准与受理范围';
     let h = '<h4 style="margin:0 0 10px;font-size:13.5px">一、收费标准总表</h4>';
     h += '<table class="qt"><tr>'+KB.feeTable[0].map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
-    KB.feeTable.slice(1).forEach(r=>{ h+=`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`; });
+    KB.feeTable.slice(1).forEach(r=>{ h+=`<tr><td>${esc(r[0])}</td><td>${esc(r[1]||'—')}</td></tr>`; });
     h += '</table>';
     h += '<h4 style="margin:20px 0 10px;font-size:13.5px">二、不可办理 / 受限事项</h4>';
     h += '<table class="qt"><tr>'+KB.blocked[0].map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
