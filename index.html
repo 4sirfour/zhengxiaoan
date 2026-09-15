@@ -73,6 +73,13 @@
     font-size:13px;outline:none;transition:.15s}
   .ssearch input:focus{border-color:var(--accent)}
   .toc{flex:1;overflow:auto;padding:0 10px 12px}
+  .lockbox{text-align:center;padding:46px 18px;color:#6b7280}
+  .lockbox .lt{font-size:15px;font-weight:600;color:#374151;margin:10px 0 6px}
+  .lockbox .ld{font-size:12.5px;line-height:1.7}
+  .drow{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed #e5e7eb;font-size:13.5px;line-height:1.65}
+  .drow:last-child{border-bottom:none}
+  .drow .dk{flex:0 0 92px;color:#6b7280}
+  .drow .dv{flex:1;color:#111827}
   .grp{border:1px solid var(--line);border-radius:11px;margin-bottom:8px;background:#fbfcfe;overflow:hidden}
   .grp>summary{list-style:none;cursor:pointer;padding:10px 12px;font-size:13px;font-weight:650;
     display:flex;align-items:center;gap:8px}
@@ -294,6 +301,17 @@
   </div>
 </div>
 
+<!-- 事项详情弹窗 -->
+<div class="mask" id="detMask">
+  <div class="modal" style="max-width:640px">
+    <div class="mh2"><b id="detTitle">事项详情</b><button class="x" data-close="detMask">×</button></div>
+    <div class="mb2" id="detBody"></div>
+    <div style="padding:0 18px 16px;text-align:right">
+      <button class="hbtn" id="detAsk" style="background:#2563eb;color:#fff;border-color:#2563eb">💬 就此事提问</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -366,11 +384,23 @@ $('#modelMenu').onclick = e=> e.stopPropagation();
 
 /* ---------- 目录 ---------- */
 async function loadKB(){
-  KB = await api('/api/kb');
-  $('#kbStat').textContent = `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}`;
+  KB = await api('/api/kb' + (INTERNAL ? '?internal=1' : ''));
+  $('#kbStat').textContent = INTERNAL ? `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}` : '仅管理员可见';
   renderTOC();
 }
 function renderTOC(){
+  // 当事人视图：不展示业务目录（条目、价格、报价、受限清单均为内部信息）
+  if(!INTERNAL){
+    $('#toc').innerHTML = `<div class="lockbox">
+      <div style="font-size:32px">🔒</div>
+      <div class="lt">业务目录已隐藏</div>
+      <div class="ld">知识库条目、收费标准与各省报价仅对内可见。<br>
+      可点击右上角「🔓 管理员视图」切换后查看。</div>
+      <div class="ld" style="margin-top:12px;padding-top:12px;border-top:1px dashed #e5e7eb">
+      当事人请直接在右侧对话提问，<br>我会按「四要素」为你分析可办理的公证。</div>
+    </div>`;
+    return;
+  }
   const q = $('#q').value.trim().toLowerCase();
   let h = '';
   KB.kb.forEach(g=>{
@@ -408,7 +438,7 @@ function renderTOC(){
 
   $('#toc').querySelectorAll('.it').forEach(el=>{
     el.onclick = ()=>{
-      if(el.dataset.no){ const it=findItem(+el.dataset.no); ask(`请说明「${it.name}」这项公证的办理要求，包括价格、户籍限制、使用地、用途和所需材料。`); }
+      if(el.dataset.no){ showDetail(findItem(+el.dataset.no)); }
       else if(el.dataset.fee) showFee('fee');
       else if(el.dataset.price) showFee('price');
       else if(el.dataset.plat){ const p=KB.platform.find(x=>x.title===el.dataset.plat); if(p) pushMsg('a', p.content, {title:p.title}); }
@@ -416,6 +446,26 @@ function renderTOC(){
     };
   });
 }
+/* 事项详情：直接查看，不发送提问 */
+let DET_IT = null;
+function showDetail(it){
+  DET_IT = it;
+  const isExt = it.mark==='ext';
+  $('#detTitle').textContent = `${it.no}. ${it.name}`;
+  let h = `<div style="padding:14px 18px 6px">
+    <span class="cb ${isExt?'y':'n'}" style="display:inline-block;margin-right:6px">${isExt?'✓ 可对外':'☐ 对内 / 仅管理员'}</span>
+    <span style="color:#6b7280;font-size:13px">${esc(it.price||'')}</span></div>
+    <div style="padding:4px 18px 10px">`;
+  (it.fields||[]).forEach(f=>{ h += `<div class="drow"><div class="dk">${esc(f[0])}</div><div class="dv">${esc(f[1])}</div></div>`; });
+  h += '</div>';
+  $('#detBody').innerHTML = h;
+  $('#detMask').classList.add('show');
+}
+$('#detAsk').onclick = ()=>{
+  if(!DET_IT) return;
+  $('#detMask').classList.remove('show');
+  ask(`我想办理「${DET_IT.name}」，请说明办理要求、材料清单和价格。`);
+};
 function findItem(no){ for(const g of KB.kb) for(const it of g.items) if(it.no===no) return it; return {name:''}; }
 $('#q').oninput = renderTOC;
 
@@ -425,7 +475,7 @@ $('#btnView').onclick = ()=>{
   $('#btnView').classList.toggle('on', INTERNAL);
   $('#btnView').textContent = INTERNAL ? '🔓 管理员视图' : '👁 当事人视图';
   $('#modeHint').textContent = INTERNAL ? '内部视图：含对内条目' : '当事人视图：仅显示可对外事项';
-  renderTOC();
+  loadKB();  // 重新拉取：当事人口径 / 管理员口径的数据不同
 };
 
 /* ---------- 聊天 ---------- */

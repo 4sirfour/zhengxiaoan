@@ -352,13 +352,26 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"models": out, "default": cfg["defaultModel"]})
 
         if p == "/api/kb":
-            return self._send(200, {"kb": K.KB, "platform": K.PLATFORM,
-                                    "quotes": K.QUOTES, "quoteHeaders": K.QUOTE_HEADERS,
-                                    "quoteNotes": K.QUOTE_NOTES,
-                                    "feeTable": K.FEE_TABLE, "blocked": K.BLOCKED,
-                                    "stats": {"total": len(K.all_items()),
-                                              "ext": len(K.ext_items()),
-                                              "int": len(K.int_items())}})
+            # 权限控制：默认（当人口径）只返回可对外条目，不泄露对内事项、
+            # 各省报价、受限清单；管理员视图带 internal=1 才返回完整数据
+            qs = parse_qs(urlparse(self.path).query)
+            internal = qs.get("internal", ["0"])[0] in ("1", "true")
+            if internal:
+                return self._send(200, {"kb": K.KB, "platform": K.PLATFORM,
+                                        "quotes": K.QUOTES, "quoteHeaders": K.QUOTE_HEADERS,
+                                        "quoteNotes": K.QUOTE_NOTES,
+                                        "feeTable": K.FEE_TABLE, "blocked": K.BLOCKED,
+                                        "stats": {"total": len(K.all_items()),
+                                                  "ext": len(K.ext_items()),
+                                                  "int": len(K.int_items())}})
+            kb_pub = [{"cat": g["cat"],
+                       "items": [dict(it) for it in g["items"] if it["mark"] == "ext"]}
+                      for g in K.KB]
+            return self._send(200, {"kb": kb_pub, "platform": K.PLATFORM,
+                                    "quotes": [], "quoteHeaders": [], "quoteNotes": [],
+                                    "feeTable": [], "blocked": [],
+                                    "stats": {"total": len(K.ext_items()),
+                                              "ext": len(K.ext_items()), "int": 0}})
 
         if p == "/api/config":
             provs = {}
