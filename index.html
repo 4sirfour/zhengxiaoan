@@ -284,6 +284,10 @@
         <label>回答温度 temperature <span class="desc">越低越稳定，建议 0.1–0.3</span></label>
         <input type="number" id="setTemp" step="0.1" min="0" max="1" value="0.2">
       </div>
+      <div class="fld">
+        <label>管理员密码 <span class="desc">进入「🔓 管理员视图」所需的验证密码</span></label>
+        <input type="text" id="setPass" placeholder="不修改请留空" autocomplete="off">
+      </div>
 
       <div id="provRows"></div>
 
@@ -308,6 +312,21 @@
     <div class="mb2" id="detBody"></div>
     <div style="padding:0 18px 16px;text-align:right">
       <button class="hbtn" id="detAsk" style="background:#2563eb;color:#fff;border-color:#2563eb">💬 就此事提问</button>
+    </div>
+  </div>
+</div>
+
+<!-- 管理员密码弹窗 -->
+<div class="mask" id="pwMask">
+  <div class="modal" style="max-width:360px">
+    <div class="mh2"><b>🔐 管理员验证</b><button class="x" data-close="pwMask">×</button></div>
+    <div class="mb2">
+      <div class="fld">
+        <label>管理员密码 <span class="desc">进入内部视图需验证；可在「⚙️ 配置」中修改</span></label>
+        <input type="password" id="pwInput" placeholder="请输入管理员密码" autocomplete="off">
+      </div>
+      <div id="pwErr" style="color:#dc2626;font-size:12.5px;min-height:18px"></div>
+      <button class="prim" id="pwOk" style="width:100%">验证并进入管理员视图</button>
     </div>
   </div>
 </div>
@@ -383,22 +402,41 @@ document.addEventListener('click', ()=> $('#modelMenu').classList.remove('show')
 $('#modelMenu').onclick = e=> e.stopPropagation();
 
 /* ---------- 目录 ---------- */
+let APASS = sessionStorage.getItem('zx_apass') || '';  // 管理员密码（会话内有效）
 async function loadKB(){
-  KB = await api('/api/kb' + (INTERNAL ? '?internal=1' : ''));
-  $('#kbStat').textContent = INTERNAL ? `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}` : '仅管理员可见';
+  KB = await api('/api/kb' + (INTERNAL ? `?internal=1&pass=${encodeURIComponent(APASS)}` : ''));
+  if(INTERNAL && KB.admin === false){  // 密码失效，退回当事人视图
+    INTERNAL = false; APASS = ''; sessionStorage.removeItem('zx_apass');
+    $('#btnView').classList.remove('on');
+    $('#btnView').textContent = '👁 当事人视图';
+  }
+  $('#kbStat').textContent = INTERNAL ? `共 ${KB.stats.total} 条 · ☑${KB.stats.ext} ☐${KB.stats.int}` : `${KB.stats.ext} 条对外事项`;
   renderTOC();
 }
 function renderTOC(){
-  // 当事人视图：不展示业务目录（条目、价格、报价、受限清单均为内部信息）
+  // 当事人视图：展示可对外条目与收费标准；对内事项/各省报价/受限清单不出现
   if(!INTERNAL){
-    $('#toc').innerHTML = `<div class="lockbox">
-      <div style="font-size:32px">🔒</div>
-      <div class="lt">业务目录已隐藏</div>
-      <div class="ld">知识库条目、收费标准与各省报价仅对内可见。<br>
-      可点击右上角「🔓 管理员视图」切换后查看。</div>
-      <div class="ld" style="margin-top:12px;padding-top:12px;border-top:1px dashed #e5e7eb">
-      当事人请直接在右侧对话提问，<br>我会按「四要素」为你分析可办理的公证。</div>
-    </div>`;
+    const q = $('#q').value.trim().toLowerCase();
+    let h = '';
+    KB.kb.forEach(g=>{
+      const items = g.items.filter(it=> !q || (g.cat+it.name+(it.fields||[]).map(f=>f[0]+f[1]).join('')).toLowerCase().includes(q));
+      if(!items.length) return;
+      h += `<details class="grp" open><summary>${esc(g.cat)}
+        <span class="cnt">${items.length} 条</span></summary><div class="body">`;
+      items.forEach(it=>{
+        h += `<div class="it" data-no="${it.no}">
+          <div class="r1"><span class="pn">${it.no}.</span><span>${esc(it.name)}</span></div>
+          <div class="pr">${esc(it.price)}</div></div>`;
+      });
+      h += '</div></details>';
+    });
+    if(KB.feeTable && KB.feeTable.length){
+      h += `<details class="grp" open><summary>📋 收费标准<small class="cnt"></small></summary><div class="body">
+        <div class="it" data-fee="1"><div class="r1">收费标准总表</div><div class="pr">点击查看</div></div>
+        </div></details>`;
+    }
+    $('#toc').innerHTML = h || '<div style="padding:20px;color:#6b7280;font-size:13px">没有匹配的条目</div>';
+    bindTocClicks();
     return;
   }
   const q = $('#q').value.trim().toLowerCase();
@@ -435,7 +473,9 @@ function renderTOC(){
     </div></details>`;
 
   $('#toc').innerHTML = h || '<div style="padding:20px;color:#6b7280;font-size:13px">没有匹配的条目</div>';
-
+  bindTocClicks();
+}
+function bindTocClicks(){
   $('#toc').querySelectorAll('.it').forEach(el=>{
     el.onclick = ()=>{
       if(el.dataset.no){ showDetail(findItem(+el.dataset.no)); }
@@ -452,8 +492,10 @@ function showDetail(it){
   DET_IT = it;
   const isExt = it.mark==='ext';
   $('#detTitle').textContent = `${it.no}. ${it.name}`;
-  let h = `<div style="padding:14px 18px 6px">
-    <span class="cb ${isExt?'y':'n'}" style="display:inline-block;margin-right:6px">${isExt?'✓ 可对外':'☐ 对内 / 仅管理员'}</span>
+  const badge = INTERNAL
+    ? `<span class="cb ${isExt?'y':'n'}" style="display:inline-block;margin-right:6px">${isExt?'✓ 可对外':'☐ 对内 / 仅管理员'}</span>`
+    : '';
+  let h = `<div style="padding:14px 18px 6px">${badge}
     <span style="color:#6b7280;font-size:13px">${esc(it.price||'')}</span></div>
     <div style="padding:4px 18px 10px">`;
   (it.fields||[]).forEach(f=>{ h += `<div class="drow"><div class="dk">${esc(f[0])}</div><div class="dv">${esc(f[1])}</div></div>`; });
@@ -471,12 +513,37 @@ $('#q').oninput = renderTOC;
 
 /* ---------- 视图切换 ---------- */
 $('#btnView').onclick = ()=>{
-  INTERNAL = !INTERNAL;
-  $('#btnView').classList.toggle('on', INTERNAL);
-  $('#btnView').textContent = INTERNAL ? '🔓 管理员视图' : '👁 当事人视图';
-  $('#modeHint').textContent = INTERNAL ? '内部视图：含对内条目' : '当事人视图：仅显示可对外事项';
-  loadKB();  // 重新拉取：当事人口径 / 管理员口径的数据不同
+  if(!INTERNAL){  // 当事人 → 管理员：需密码验证
+    $('#pwErr').textContent = ''; $('#pwInput').value = APASS;
+    $('#pwMask').classList.add('show');
+    setTimeout(()=>$('#pwInput').focus(), 50);
+  }else{          // 管理员 → 当事人：直接切换
+    INTERNAL = false;
+    $('#btnView').classList.remove('on');
+    $('#btnView').textContent = '👁 当事人视图';
+    $('#modeHint').textContent = '当事人视图：仅显示可对外事项';
+    loadKB();
+  }
 };
+async function tryAdminLogin(){
+  const p = $('#pwInput').value;
+  if(!p){ $('#pwErr').textContent = '请输入密码'; return; }
+  try{
+    const d = await api('/api/admin/login',{method:'POST',body:JSON.stringify({pass:p})});
+    if(!d.ok){ $('#pwErr').textContent = '密码错误，请重试'; return; }
+    APASS = p; sessionStorage.setItem('zx_apass', p);
+    INTERNAL = true;
+    $('#pwMask').classList.remove('show');
+    $('#btnView').classList.add('on');
+    $('#btnView').textContent = '🔓 管理员视图';
+    $('#modeHint').textContent = '内部视图：含对内条目';
+    await loadKB();
+  }catch(e){
+    $('#pwErr').textContent = '密码错误，请重试';
+  }
+}
+$('#pwOk').onclick = tryAdminLogin;
+$('#pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryAdminLogin(); });
 
 /* ---------- 聊天 ---------- */
 let HIST = [];  // 对话历史 [{role:'user'|'assistant', text}]，随请求发给后端做上下文
@@ -613,7 +680,9 @@ $('#saveCfg').onclick = async ()=>{
   const keys = {};
   $('#provRows').querySelectorAll('input[data-prov]').forEach(i=>{ if(i.value.trim()) keys[i.dataset.prov]=i.value.trim(); });
   const body = {keys, defaultModel:$('#setModel').value, topK:+$('#setK').value, temperature:+$('#setTemp').value};
+  if($('#setPass').value.trim()) body.adminPass = $('#setPass').value.trim();
   await api('/api/config',{method:'POST',body:JSON.stringify(body)});
+  $('#setPass').value = '';
   CUR_MODEL = body.defaultModel; localStorage.setItem('zx_model',CUR_MODEL);
   await loadModels();
   $('#cfgOk').textContent = '✅ 已保存，可立即使用';

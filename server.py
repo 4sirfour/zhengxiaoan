@@ -97,7 +97,8 @@ CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json
 
 
 def load_cfg():
-    cfg = {"keys": {}, "defaultModel": "deepseek-chat", "topK": 4}
+    cfg = {"keys": {}, "defaultModel": "deepseek-chat", "topK": 4,
+           "adminPass": "zx2026"}
     # 环境变量优先
     for prov, names in ENV_KEYS.items():
         for n in names:
@@ -110,6 +111,8 @@ def load_cfg():
             cfg["keys"].update({k: v for k, v in saved.get("keys", {}).items() if v})
             cfg["defaultModel"] = saved.get("defaultModel", cfg["defaultModel"])
             cfg["topK"] = saved.get("topK", cfg["topK"])
+            if saved.get("adminPass"):
+                cfg["adminPass"] = saved["adminPass"]
         except Exception:
             pass
     return cfg
@@ -352,15 +355,19 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"models": out, "default": cfg["defaultModel"]})
 
         if p == "/api/kb":
-            # 权限控制：默认（当人口径）只返回可对外条目，不泄露对内事项、
-            # 各省报价、受限清单；管理员视图带 internal=1 才返回完整数据
+            # 权限控制：默认（当人口径）返回可对外条目 + 收费标准总表；
+            # 对内事项、各省报价、受限清单仅管理员可见（需密码校验）
             qs = parse_qs(urlparse(self.path).query)
             internal = qs.get("internal", ["0"])[0] in ("1", "true")
             if internal:
+                passed = qs.get("pass", [""])[0] == cfg.get("adminPass")
+                if not passed:
+                    return self._send(401, {"error": "管理员密码错误"})
                 return self._send(200, {"kb": K.KB, "platform": K.PLATFORM,
                                         "quotes": K.QUOTES, "quoteHeaders": K.QUOTE_HEADERS,
                                         "quoteNotes": K.QUOTE_NOTES,
                                         "feeTable": K.FEE_TABLE, "blocked": K.BLOCKED,
+                                        "admin": True,
                                         "stats": {"total": len(K.all_items()),
                                                   "ext": len(K.ext_items()),
                                                   "int": len(K.int_items())}})
@@ -369,7 +376,8 @@ class H(BaseHTTPRequestHandler):
                       for g in K.KB]
             return self._send(200, {"kb": kb_pub, "platform": K.PLATFORM,
                                     "quotes": [], "quoteHeaders": [], "quoteNotes": [],
-                                    "feeTable": [], "blocked": [],
+                                    "feeTable": K.FEE_TABLE, "blocked": [],
+                                    "admin": False,
                                     "stats": {"total": len(K.ext_items()),
                                               "ext": len(K.ext_items()), "int": 0}})
 
@@ -499,11 +507,17 @@ class H(BaseHTTPRequestHandler):
                                     "hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits],
                                     "model": model, "mode": "llm"})
 
+        if p == "/api/admin/login":
+            ok = (b.get("pass") or "") == cfg.get("adminPass")
+            return self._send(200 if ok else 401, {"ok": ok})
+
         if p == "/api/config":
             if "keys" in b:
                 for prov, v in b["keys"].items():
                     if v and "****" not in v:
                         cfg["keys"][prov] = v.strip()
+            if b.get("adminPass", "").strip():
+                cfg["adminPass"] = b["adminPass"].strip()
             for k in ("defaultModel", "topK", "temperature"):
                 if k in b:
                     cfg[k] = b[k]
