@@ -257,18 +257,22 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
 ① 办什么公证  ② 户籍在哪儿  ③ 在哪儿使用  ④ 用途是什么
 
 【工作步骤】
-1. 先判断四要素是否齐全。任一要素缺失，必须先追问缺失项，不得凭默认值作答。
-   ⚠️ 只追问「尚未提供」的要素；当事人已经说清楚的，绝不能再问一遍。
-   若四要素已全部齐全，直接进入第 2 步，不要输出任何追问段落。
-2. 四要素齐全后做分析：
+1. 边答边问，禁止只追问不给内容：
+   - 拿「当事人已明确的要素」先匹配知识库，把当前能确定的分析直接说出来：
+     可能适用的事项条目（编号、价格、关键材料、受理限制），以及已经可以确定的结论
+   - 若缺失的要素会导致不同结论，用「若…则…」简要分情况说明
+   - 全部分析给完之后，最后用一两句话请当事人补充仍缺的要素，不要展开长篇追问
+2. 四要素齐全后做完整分析：
    - 归类：归入具体的公证事项条目
    - 校验：逐项核对地域限制、产权性质限制、线上可办性、涉外可认可性
    - 冲突识别：四要素与知识库限制冲突时，直接指出冲突点
    - 方案比较：存在多种路径时（如车辆过户可选协议公证或赠与公证），比较并推荐
    - 风险提示：主动提示不被认可的风险
 3. 输出结构：结论 → 依据（标注条目编号）→ 办理要素 → 材料清单 → 价格与时长 → 下一步
+   （要素不全时先给「初步判断」，可用的结构类似，但必须有实质内容和依据）
 
 【禁止】
+- 禁止只抛出追问、不给任何实质性分析内容
 - 禁止仅摘抄知识库原文片段作为回答
 - 禁止编造价格、材料清单、受理结论
 - 禁止把「对内/仅管理员」的事项当作可对外办理事项答复给当事人
@@ -286,6 +290,21 @@ def build_context(hits):
         tag = "【可对外】" if h["mark"] == "ext" else "【对内/仅管理员】"
         parts.append(f"--- {tag} {h['title']} ---\n{h['content']}")
     return "\n\n".join(parts)
+
+
+def kb_catalog(include_internal=False):
+    """知识库全部事项目录（按类目分组，含编号与价格），供模型在要素不全时给出可能方向"""
+    seen = {}
+    order = []
+    for it in K.all_items():
+        if it["mark"] == "int" and not include_internal:
+            continue
+        if it["cat"] not in seen:
+            seen[it["cat"]] = []
+            order.append(it["cat"])
+        price = (it.get("price") or "—").split("（")[0]
+        seen[it["cat"]].append(f"{it['no']}.{it['name']}（{price}）")
+    return "\n".join(f"{cat}：" + "；".join(seen[cat]) for cat in order)
 
 
 # ==================== HTTP 服务 ====================
@@ -395,15 +414,19 @@ class H(BaseHTTPRequestHandler):
             m = next((x for x in MODELS if x["id"] == model), None)
             if m and m["provider"] == "none":
                 if not hits:
+                    ans = ("当前知识库未检索到与提问直接相关的条目。\n\n"
+                           "【可对外办理的全部事项目录】\n" + kb_catalog() +
+                           "\n\n您可以从中指出想办的事项，或补充更多信息后再次提问。")
                     return self._send(200, {
-                        "answer": "当前知识库未提供相关依据。建议补充对应公证事项条目，或联系业务负责人确认。",
-                        "four": four, "missing": missing, "hits": [], "model": model, "mode": "kb"})
+                        "answer": ans, "four": four, "missing": missing,
+                        "hits": [], "model": model, "mode": "kb"})
                 lines = ["【仅知识库检索 · 未启用模型分析】", ""]
-                if missing:
-                    lines.append("⚠️ 四要素尚缺：" + "、".join(missing) + "，建议先向当事人确认后再判断。\n")
                 for h in hits:
                     tag = "可对外" if h["mark"] == "ext" else "对内/仅管理员"
                     lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
+                if missing:
+                    lines.append("——\n提示：四要素尚缺「" + "、".join(missing) +
+                                 "」，补齐后可给出更精准的判断（右上角切换到模型分析可获得完整解读）。")
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing,
                                         "hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits],
@@ -415,12 +438,15 @@ class H(BaseHTTPRequestHandler):
                 ask = "、".join(missing)
                 user = (f"当事人提问：{q}\n\n"
                         f"知识库检索到的相关条目：\n{build_context(hits)}\n\n"
+                        f"【知识库全部可对外事项目录】\n{kb_catalog()}\n\n"
                         f"【四要素核对结果】\n"
                         f"- 当事人已明确：{'、'.join(have) if have else '（无）'}\n"
                         f"- 仍缺失：{ask}\n\n"
-                        f"请只针对「仍缺失」的要素逐条追问（说明要问什么、为什么需要），"
-                        f"已经明确说过的要素一律不要再问。"
-                        f"然后基于已知信息给出初步判断与可能方向，不要臆测缺失信息。")
+                        f"请「边答边问」，严格按以下顺序回答：\n"
+                        f"1. 先基于已明确的要素，对照检索条目与事项目录，把当前能确定的分析直接给出来"
+                        f"（可能适用的事项、价格、材料、限制条件、已可下的初步结论）；\n"
+                        f"2. 若缺失的要素会导向不同结论，用「若…则…」简要分情况说明；\n"
+                        f"3. 最后用一两句话请当事人补充仍缺失的要素（{ask}），不要展开长篇追问。")
             else:
                 user = (f"当事人提问：{q}\n\n"
                         f"知识库检索到的相关条目：\n{build_context(hits)}\n\n"
@@ -446,11 +472,11 @@ class H(BaseHTTPRequestHandler):
             if err:
                 # 模型不可用时降级为知识库检索，保证服务可用
                 lines = [f"⚠️ {err}", "", "已自动降级为知识库检索结果：", ""]
-                if missing:
-                    lines.append("四要素尚缺：" + "、".join(missing) + "\n")
                 for h in hits:
                     tag = "可对外" if h["mark"] == "ext" else "对内/仅管理员"
                     lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
+                if missing:
+                    lines.append("——\n提示：四要素尚缺「" + "、".join(missing) + "」。")
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing, "degraded": True,
                                         "hits": [{"title": h["title"], "mark": h["mark"], "no": h["no"]} for h in hits],
