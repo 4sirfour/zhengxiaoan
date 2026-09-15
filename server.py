@@ -94,6 +94,13 @@ ENV_KEYS = {
     "qwen": ["QWEN_API_KEY", "DASHSCOPE_API_KEY"],
 }
 
+# 图片识图模型（多模态）：按 provider 指定可用的视觉模型。
+# 优先用免费且效果稳定的 glm-4v-flash；未配置对应 Key 时前端会提示无法识图。
+VISION_MODELS = {
+    "glm": {"model": "glm-4v-flash", "base": "https://open.bigmodel.cn/api/paas/v4"},
+    "qwen": {"model": "qwen-vl-plus", "base": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+}
+
 CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 
@@ -181,6 +188,25 @@ PERIOD_WORDS = ("几天", "多久", "多长时间", "多少天", "几个工作�
 def _is_period_q(q):
     q = q or ""
     return any(w in q for w in PERIOD_WORDS)
+
+
+# 红线校验：提问/识图内容触碰到知识库明确禁止项、而模型回答未给出禁止结论时，
+# 由系统在答案末尾强制补充警示（不依赖模型自觉，杜绝漏说）
+# (触发词, 回答中应出现的结论句, 补充文案)
+REDLINE_NOTES = [
+    ("代收", "不能代收", "卖房款项不能代收（知识库条目 1「房屋、车辆买卖委托」要求）"),
+]
+
+
+def redline_notes(text, ans):
+    """返回需要系统强制补充的红线提示列表。"""
+    t = text or ""
+    out = []
+    for kw, must, note in REDLINE_NOTES:
+        if kw in t and must not in (ans or ""):
+            out.append(f"您咨询的内容涉及「{kw}房款」：按知识库口径，{note}。"
+                       f"请以办理公证处最终口径为准。")
+    return out
 
 
 def period_note():
@@ -463,6 +489,96 @@ def call_llm(model_id, messages, cfg, timeout=90):
         return None, f"模型调用失败 HTTP {e.code}：{detail}"
     except Exception as e:
         return None, f"模型调用失败：{e}"
+
+
+# ==================== 图片识图 ====================
+# 识别图片内容并抽取「公证业务需求」。三类图片都要能读：
+# ①证件/材料照片（不动产权证、房产证、户口本、公证书…）
+# ②聊天/需求截图（微信里别人发的需求、代办描述）
+# ③卷宗/文书扫描件（委托书、声明书、卷宗页）
+VISION_PROMPT = """你是公证业务的需求识别助手。请阅读用户上传的图片，抽取其中与「公证办理」相关的业务信息。
+
+【第一步 · 判断图片类型】
+正证照 / 材料照片 / 聊天需求截图 / 卷宗文书 / 与公证无关 / 无法辨认
+
+【第二步 · 按下面格式输出结构化结果】
+图片类型：（上面六选一）
+业务需求：（用一句话概括当事人到底想办什么公证。截图里若有多条需求，逐条列出）
+涉及事项：（对应公证事项名，如 房屋买卖委托、结婚证公证、亲属关系公证、无犯罪记录公证；不确定就写「不确定」）
+省份/户籍：（能看出的省份或城市；看不出写「未提及」）
+使用地：（国内 / 具体国家 / 涉外；看不出写「未提及」）
+用途：（留学、签证、移民、过户、诉讼、继承等；看不出写「未提及」）
+关键信息：（证件号、产权证号、姓名等可见要点，涉及敏感号码用「已隐去」代替，不要完整复述）
+能否判断：（能判断 / 信息不足）
+
+【硬性要求】
+1. 只描述图片里真实可见的内容，严禁脑补和推测图片外的信息。
+2. 涉及身份证号、手机号、银行卡号等敏感信息，只写「已隐去」，不要抄录。
+3. 图片与公证业务无关时，明确说「图片内容与公证业务无关」，不要强行编造需求。
+4. 图片模糊无法辨认时，明确说「图片模糊，无法辨认」，并指出哪部分看不清。
+5. 不要给出「能不能办」「多少钱」的结论——这一步只做识别，后续由业务系统判定。
+"""
+
+
+def vision_analyze(images, cfg, note="", provider=None, timeout=90):
+    """用视觉模型识别图片内容。images 为 dataURL 或 http 地址列表。
+
+    返回 (识别文本, 错误信息)。
+    """
+    if not images:
+        return None, "未提供图片"
+    # 选一个已配置 Key 的视觉模型
+    provs = [provider] if provider else list(VISION_MODELS.keys())
+    picked = None
+    for p in provs:
+        if p in VISION_MODELS and cfg["keys"].get(p):
+            picked = p
+            break
+    if not picked:
+        return None, ("图片识别需要视觉模型（智谱 GLM-4V / 通义千问 VL）。"
+                      "请在右上角「配置」里填入智谱或通义的 API Key 后重试。")
+    vm = VISION_MODELS[picked]
+    base = cfg.get("customBase", {}).get(picked, vm["base"]).rstrip("/")
+    content = [{"type": "text", "text": VISION_PROMPT}]
+    for im in images[:4]:                      # 单次最多识别 4 张
+        content.append({"type": "image_url", "image_url": {"url": im}})
+    if note:
+        content.append({"type": "text", "text": f"（用户补充说明：{note}）"})
+    body = json.dumps({
+        "model": vm["model"],
+        "messages": [{"role": "user", "content": content}],
+        "temperature": 0.1,
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(base + "/chat/completions", data=body, method="POST",
+                                 headers={"Content-Type": "application/json",
+                                          "Authorization": "Bearer " + cfg["keys"][picked]})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        return data["choices"][0]["message"]["content"], None
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "ignore")[:300]
+        return None, f"图片识别失败 HTTP {e.code}：{detail}"
+    except Exception as e:
+        return None, f"图片识别失败：{e}"
+
+
+# 从识别文本中抽取检索用关键词
+def vision_keywords(vtext):
+    """把识图结果压成一句可用于检索的查询串（事项词 + 省份 + 用途）。"""
+    parts = []
+    for line in (vtext or "").split("\n"):
+        if "：" not in line:
+            continue
+        k, v = line.split("：", 1)
+        k, v = k.strip().lstrip("-* ").strip(), v.strip()
+        if k.startswith("业务需求") or k.startswith("涉及事项"):
+            parts.insert(0, v)
+        elif k.startswith("省份") or k.startswith("户籍") or k.startswith("用途"):
+            if v and v not in ("未提及", "—", "-"):
+                parts.append(v)
+    return " ".join(p for p in parts if p)[:300]
 
 
 # ==================== 提示词 ====================
@@ -896,6 +1012,21 @@ class H(BaseHTTPRequestHandler):
                           include_internal=b.get("includeInternal", True))
             return self._send(200, {"hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits]})
 
+        if p == "/api/vision":
+            # 图片识别：读图 → 抽取业务需求 → 复用 /api/ask 的检索判定链路
+            images = [x for x in (b.get("images") or []) if isinstance(x, str) and x]
+            note = (b.get("note") or "").strip()
+            if not images:
+                return self._send(400, {"error": "请先选择图片"})
+            if len(images) > 4:
+                images = images[:4]
+            vtxt, verr = vision_analyze(images, cfg, note)
+            if verr:
+                return self._send(200, {"ok": False, "error": verr,
+                                        "answer": f"⚠️ {verr}"})
+            return self._send(200, {"ok": True, "vision": vtxt,
+                                    "query": vision_keywords(vtxt)})
+
         if p == "/api/ask":
             q = (b.get("q") or "").strip()
             model = b.get("model") or cfg["defaultModel"]
@@ -904,10 +1035,15 @@ class H(BaseHTTPRequestHandler):
             hist = [h for h in (b.get("history") or [])
                     if isinstance(h, dict) and isinstance(h.get("text"), str) and h["text"].strip()]
             hist = hist[-8:]  # 最多保留最近 4 轮
-            if not q:
-                return self._send(400, {"error": "请输入问题"})
+            # 识图结果（由 /api/vision 得到后随提问一起提交）：
+            # 作为补充材料注入，并在答案开头回显「我读到了什么」
+            vision_ctx = (b.get("vision") or "").strip()
+            if not q and not vision_ctx:
+                return self._send(400, {"error": "请输入问题或上传图片"})
+            if not q and vision_ctx:
+                q = vision_keywords(vision_ctx) or "图片中的公证需求"
 
-            # ---- 四要素：当前问题 + 历史用户消息 合并判断 ----
+            # ---- 四要素：当前问题 + 历史用户消息 + 识图结果 合并判断 ----
             # 某一要素只要在任何一轮中明确过，后续就不再追问
             four = extract_four(q)
             hist_user_texts = [h["text"].strip() for h in hist if h.get("role") == "user"]
@@ -915,16 +1051,31 @@ class H(BaseHTTPRequestHandler):
                 hf = extract_four(t)
                 for k, v in hf.items():
                     four[k] = four[k] or v
+            if vision_ctx:
+                # 图片里读到的省份/用途/使用地也算已明确；
+                # 但「未提及」的字段行要剔除，否则「户籍：未提及」会被误判为已明确
+                vtext_for_four = "\n".join(l for l in vision_ctx.split("\n")
+                                           if "未提及" not in l and "无法辨认" not in l)
+                for k, v in extract_four(vtext_for_four).items():
+                    four[k] = four[k] or v
             missing = [k for k, v in four.items() if not v]
 
-            # ---- 检索：当前问题 + 最近两轮用户输入，提升上下文命中率 ----
+            # ---- 检索：识图关键词 + 当前问题 + 最近两轮用户输入 ----
             search_q = " ".join(hist_user_texts[-2:] + [q])
+            if vision_ctx:
+                # 识图出的事项词是检索主信号（"这个能办吗"这类问题本身无事项词）
+                vk = vision_keywords(vision_ctx)
+                if vk:
+                    search_q = vk + " " + search_q
+            # 相关性判定同样要用检索串：识图场景下用户问题常是「能办吗」这类
+            # 无事项词的问法，用原句判定会误判为「知识库未收录」
+            rel_q = search_q if vision_ctx else q
             topk = int(b.get("k") or cfg.get("topK", 4))
             hits = search(search_q, k=topk, include_internal=internal_view)
             # 相关度判定：必须命中「事项级特征词」才算知识库有对应条目，
             # 否则视为未收录 → 走官方底库/网络兜底，避免挪用其他事项材料
             strong_hits = [h for h in hits if h.get("_score", 0) >= 1.0]
-            kb_ok = bool(hits) and hit_is_relevant(q, hits) and bool(strong_hits)
+            kb_ok = bool(hits) and hit_is_relevant(rel_q, hits) and bool(strong_hits)
             if not kb_ok:
                 # 二次召回：默认 topK 偏小，像「身份证、户口本、护照…」这类
                 # 多主题条目容易被挤出。扩大召回范围后再判一次，避免误判为未收录。
@@ -932,7 +1083,7 @@ class H(BaseHTTPRequestHandler):
                 # 弱相关条目（如「公司」→「公司股权协议」）也当成本事项目。
                 wider = search(search_q, k=max(topk * 6, 24), include_internal=internal_view)
                 w_strong = [h for h in wider if h.get("_score", 0) >= 1.0]
-                if (w_strong and hit_is_relevant(q, w_strong[:2])
+                if (w_strong and hit_is_relevant(rel_q, w_strong[:2])
                         and w_strong[0].get("_score", 0) >= 2.0):
                     hits = w_strong[:topk]
                     strong_hits = hits
@@ -982,8 +1133,9 @@ class H(BaseHTTPRequestHandler):
                     g_txt, g_ok = gap_web_search(q, gaps, topics, search_q)
                     if g_ok:
                         web_txt, web_ok = g_txt, g_ok
-            # 问「要几天/多久」→ 注入各省报价表中的办理周期（知识库内容）
-            pn = period_note() if _is_period_q(q) else ""
+            # 问「要几天/多久」→ 注入各省报价表中的办理周期（知识库内容）；
+            # 识图场景一律注入，避免模型就周期自行编造常见值
+            pn = period_note() if (_is_period_q(q) or vision_ctx) else ""
             gap_labels = "、".join(sorted({t for _k, t, _h in gaps})) if gaps else ""
 
             # ---- 仅知识库检索模式 ----
@@ -1008,6 +1160,9 @@ class H(BaseHTTPRequestHandler):
                         "hits": [], "model": model, "mode": "kb",
                         "official": off_ok, "web": web_ok})
                 lines = ["【仅知识库检索 · 未启用模型分析】", ""]
+                if vision_ctx:
+                    # 回显读图结果，让当事人核对识别准确性
+                    lines.append("【我读到的图片内容】\n" + vision_ctx + "\n")
                 for h in hits:
                     tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
                     if h.get("id") == "fee":
@@ -1029,11 +1184,14 @@ class H(BaseHTTPRequestHandler):
                     lines.append("\n——\n（以下为非现有知识库内容，仅做参考）\n"
                                  f"知识库条目中「{gap_labels}」暂无收录，"
                                  "以下为联网补充检索信息：\n" + web_txt)
+                for _rl in redline_notes(q + " " + vision_ctx, "\n".join(lines)):
+                    lines.append("\n——\n⚠️ " + _rl)
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing,
                                         "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                         "model": model, "mode": "kb",
-                                        "official": off_ok, "web": web_ok})
+                                        "official": off_ok, "web": web_ok,
+                                        "vision": vision_ctx})
 
             # ---- 模型分析模式 ----
             have = [k for k, v in four.items() if v]
@@ -1085,6 +1243,19 @@ class H(BaseHTTPRequestHandler):
 
             if internal_view:
                 user += "\n\n（当前为管理员视图，可参考完整结论与内部报价。）"
+            # 识图结果作为事实材料注入：要求模型先回显识别内容，再据此判定
+            if vision_ctx:
+                user += (f"\n\n【当事人上传图片的识别结果 · 作为事实依据】\n{vision_ctx}\n\n"
+                         "以上为系统读图所得，请按此作答：\n"
+                         "1. 先用一小段回显「我读到的内容」（事项、省份、用途等关键信息），"
+                         "让当事人核对识别是否准确；\n"
+                         "2. 再据此给出「能不能办」的明确结论，并附依据、材料、价格、周期；\n"
+                         "3. 识别结果中标注「未提及」的要素（如户籍、用途），按四要素规则继续追问；\n"
+                         "4. 若识别结果显示图片与公证业务无关或无法辨认，直接说明并请当事人改用文字描述，"
+                         "不得硬凑一个公证事项；\n"
+                         "5. 识别出的需求若与知识库条目的限制冲突（如需求含「代收房款」"
+                         "而条目「要求」写明「卖房款项不能代收」），必须明确指出该冲突："
+                         "冲突部分不能办，其余可办部分正常分析，不得回避。")
             if kb_ok and gaps and web_ok:
                 # 尾部强提醒：轻量模型对长提示词中部的指令容易忽略，
                 # 在消息末尾再强调一次标注要求
@@ -1127,11 +1298,14 @@ class H(BaseHTTPRequestHandler):
                                  "以下为联网补充检索信息：\n" + web_txt)
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) + "」。")
+                for _rl in redline_notes(q + " " + vision_ctx, "\n".join(lines)):
+                    lines.append("\n——\n⚠️ " + _rl)
                 return self._send(200, {"answer": "\n".join(lines), "four": four,
                                         "missing": missing, "degraded": True,
                                         "official": off_ok, "web": web_ok,
                                         "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
-                                        "model": model, "mode": "fallback"})
+                                        "model": model, "mode": "fallback",
+                                        "vision": vision_ctx})
 
             # 兜底标注：模型（尤其轻量模型）未按提示词要求单独标注缺口内容时，
             # 由系统在答案末尾自动补上，确保「非现有知识库内容，仅做参考」一定出现
@@ -1140,10 +1314,16 @@ class H(BaseHTTPRequestHandler):
                         f"知识库条目中「{gap_labels}」暂无收录，"
                         f"以上回答中涉及该部分的内容与以下信息均来自联网检索，仅供参考：\n{web_txt}")
 
+            # 红线校验：模型回答若漏掉了知识库明确禁止项，系统强制补充
+            rl = redline_notes(q + " " + vision_ctx, ans)
+            if rl:
+                ans += "\n\n——\n⚠️ " + " ".join(rl)
+
             return self._send(200, {"answer": ans, "four": four, "missing": missing,
                                     "official": off_ok, "web": web_ok,
                                     "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
-                                    "model": model, "mode": "llm"})
+                                    "model": model, "mode": "llm",
+                                    "vision": vision_ctx})
 
         if p == "/api/admin/login":
             ok = (b.get("pass") or "") == cfg.get("adminPass")

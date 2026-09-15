@@ -140,6 +140,14 @@
     font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;flex:0 0 auto}
   .ibox button:hover{background:#2f5cd8}
   .ibox button:disabled{background:#c7d2e8;cursor:not-allowed}
+  .ibox button.ghost{background:#eef2fb;color:#42526e;padding:9px 12px}
+  .ibox button.ghost:hover{background:#e0e7f7}
+  .imgs{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .imgs .it{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+  .imgs .it img{width:100%;height:100%;object-fit:cover;display:block}
+  .imgs .it .rm{position:absolute;top:0;right:0;width:18px;height:18px;border:0;border-radius:0 0 0 6px;
+    background:rgba(20,30,55,.72);color:#fff;font-size:11px;line-height:18px;cursor:pointer;padding:0}
+  .imgs .hint{font-size:11.5px;color:var(--muted);align-self:center}
   .chint{font-size:11.5px;color:var(--sub);margin-top:8px;display:flex;justify-content:space-between;gap:10px}
   .f4{display:flex;gap:5px;flex-wrap:wrap}
   .f4 .f{border-radius:6px;padding:2px 7px;font-size:11px;background:#f1f4f9;color:var(--sub)}
@@ -249,9 +257,12 @@
     <div class="composer">
       <div class="cwrap">
         <div class="ibox">
-          <textarea id="inp" rows="1" placeholder="描述你的公证需求，尽量说清四要素…（Enter 发送，Shift+Enter 换行）"></textarea>
+          <button type="button" class="ghost" id="imgBtn" title="上传图片识别（证件/截图/文书，最多 4 张）">📎 图片</button>
+          <input type="file" id="imgFile" accept="image/*" multiple style="display:none">
+          <textarea id="inp" rows="1" placeholder="描述你的公证需求，或上传图片识别，尽量说清四要素…（Enter 发送，Shift+Enter 换行）"></textarea>
           <button id="send">发送</button>
         </div>
+        <div class="imgs" id="imgBar" style="display:none"></div>
         <div class="chint">
           <div class="f4" id="f4bar"></div>
           <div id="modeHint">四要素越完整，结论越准</div>
@@ -587,7 +598,99 @@ async function ask(text){
     BUSY=false; $('#send').disabled=false;
   }
 }
-$('#send').onclick = ()=>{ const v=$('#inp').value; $('#inp').value=''; $('#inp').style.height='auto'; syncF4(); ask(v); };
+$('#send').onclick = ()=>{
+  const v=$('#inp').value; $('#inp').value=''; $('#inp').style.height='auto';
+  const imgs = PENDING_IMGS.slice(); PENDING_IMGS=[]; paintImgs();
+  syncF4();
+  if(imgs.length) askWithImages(v, imgs); else ask(v);
+};
+
+/* ---------- 图片上传识别 ---------- */
+let PENDING_IMGS = [];   // dataURL 列表，最多 4 张
+const MAX_IMGS = 4;
+
+function paintImgs(){
+  const bar = $('#imgBar');
+  if(!PENDING_IMGS.length){ bar.style.display='none'; bar.innerHTML=''; return; }
+  bar.style.display='flex';
+  bar.innerHTML = PENDING_IMGS.map((d,i)=>
+    `<div class="it"><img src="${d}"><button class="rm" data-i="${i}" title="移除">×</button></div>`).join('')
+    + `<span class="hint">已选 ${PENDING_IMGS.length}/${MAX_IMGS} 张，发送后自动识别</span>`;
+  bar.querySelectorAll('.rm').forEach(b=> b.onclick = ()=>{ PENDING_IMGS.splice(+b.dataset.i,1); paintImgs(); });
+}
+// 压缩到长边 1280 的 JPEG，控制 base64 体积（视觉模型上限 & 上传速度）
+function compressImg(file){
+  return new Promise((res)=>{
+    const r = new FileReader();
+    r.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const M = 1280;
+        let {width:w, height:h} = img;
+        if(Math.max(w,h) > M){ const k = M/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+        const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        res(cv.toDataURL('image/jpeg', .85));
+      };
+      img.onerror = ()=> res(r.result);   // 解码失败就用原图
+      img.src = r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+$('#imgBtn').onclick = ()=> $('#imgFile').click();
+$('#imgFile').onchange = async (e)=>{
+  const files = [...(e.target.files||[])].slice(0, MAX_IMGS - PENDING_IMGS.length);
+  for(const f of files){ PENDING_IMGS.push(await compressImg(f)); }
+  e.target.value='';
+  paintImgs();
+};
+$('#inp').addEventListener('paste', async (e)=>{
+  // 支持直接 Ctrl+V 粘贴截图
+  const files = [...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));
+  if(!files.length) return;
+  e.preventDefault();
+  for(const f of files.slice(0, MAX_IMGS - PENDING_IMGS.length)){ PENDING_IMGS.push(await compressImg(f)); }
+  paintImgs();
+});
+
+async function askWithImages(text, imgs){
+  if(BUSY) return;
+  BUSY = true; $('#send').disabled = true;
+  const label = (text.trim() || '图片里的业务能办吗') + (imgs.length ? `（附 ${imgs.length} 张图片）` : '');
+  pushMsg('u', label);
+  const hist = HIST.slice();
+  HIST.push({role:'user', text: label});
+  typing();
+  try{
+    // 第一步：识图
+    const v = await api('/api/vision',{method:'POST',body:JSON.stringify({images:imgs, note:text})});
+    $('#typing')?.remove();
+    if(!v.ok){
+      HIST.push({role:'assistant', text:v.answer||v.error});
+      pushMsg('a', v.answer || ('识图失败：'+(v.error||'未知错误')));
+      return;
+    }
+    // 第二步：按识别结果走判定链路
+    typing();
+    const d = await api('/api/ask',{method:'POST',body:JSON.stringify({
+      q:(text.trim() || '图片里的业务能办吗'), vision:v.vision,
+      model:CUR_MODEL, internalView:INTERNAL, history:hist
+    })});
+    $('#typing')?.remove();
+    HIST.push({role:'assistant', text:d.answer||''});
+    if(HIST.length > 12) HIST = HIST.slice(-12);
+    const m = curModel();
+    pushMsg('a', d.answer, {model:m.label, mode:d.mode, degraded:d.degraded,
+      hits:d.hits, missing:d.missing});
+    if(d.four) paintF4(d.four);
+  }catch(e){
+    $('#typing')?.remove();
+    pushMsg('a', '出错了：'+e.message);
+  }finally{
+    BUSY=false; $('#send').disabled=false;
+  }
+}
 $('#inp').addEventListener('keydown', e=>{
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); $('#send').click(); }
 });
