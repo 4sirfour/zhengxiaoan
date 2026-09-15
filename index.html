@@ -616,11 +616,12 @@ document.querySelectorAll('.chip').forEach(c=> c.onclick = ()=>{ $('#inp').value
 function showFee(kind){
   if(kind==='price'){
     if(!KB.quotes || !KB.quotes.length){ return; }  // 非管理员无报价数据
-    $('#feeTitle').textContent='各省报价表';
+    $('#feeTitle').textContent='各省涉外报价表（C 端）';
     let h = `<div class="warnbox">${KB.quoteNotes.map(n=>'· '+esc(n)).join('<br>')}</div>`;
     h += '<table class="qt"><tr>'+KB.quoteHeaders.map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
-    KB.quotes.forEach(q=>{ h+=`<tr><td>${esc(q.prov)}</td><td>${esc(q.d)}</td><td>${esc(q.s)}</td>
-      <td>${esc(q.h)}</td><td>${esc(q.way)}</td><td>${esc(q.note)}</td></tr>`; });
+    KB.quotes.forEach(q=>{ h+=`<tr><td>${esc(q.prov)}</td>`
+      +`<td>${q.d} 元</td><td>${q.s} 元</td><td>${q.dh} 元</td><td>${q.sh} 元</td>`
+      +`<td>${esc(q.way)}</td><td>${esc(q.period)}</td><td>${esc(q.tr)}</td><td>${esc(q.periodAuth)}</td></tr>`; });
     h += '</table>';
     $('#feeBody').innerHTML = h;
   } else {

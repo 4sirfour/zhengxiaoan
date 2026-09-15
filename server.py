@@ -160,6 +160,15 @@ def _doc_weight(d):
 
 
 PRICE_WORDS = ("价格", "价钱", "多少钱", "费用", "收费", "报价", "怎么收", "多少", "价位", "贵不贵")
+# 明确的「问价」信号：出现其一即认为用户在问价格（「多少」单独也算，
+# 因为中文口语问价基本都带「多少」；配合「收费总表已被召回」双重约束使用）
+_STRONG_PRICE_WORDS = ("价格", "价钱", "多少钱", "费用", "收费", "报价", "怎么收", "价位", "贵不贵")
+
+
+def _is_price_q(q):
+    """是否为价格类问法。"""
+    q = q or ""
+    return any(w in q for w in _STRONG_PRICE_WORDS) or ("多少" in q)
 
 
 def _is_platform_doc(d):
@@ -175,6 +184,7 @@ def search(query, k=4, include_internal=True):
     # 命中词多、得分虚高，容易抢占具体事项条目的排序位。
     # 因此仅在问题涉及「价格/费用」时才纳入平台类文档。
     allow_platform = any(w in (query or "") for w in PRICE_WORDS)
+    price_q = _is_price_q(query)
     scored = []
     for d in DOCS:
         if _is_platform_doc(d) and not allow_platform:
@@ -193,10 +203,38 @@ def search(query, k=4, include_internal=True):
                 score *= 1.25
         # 文档类型权重：具体条目优先于平台类泛化文档
         score *= _doc_weight(d)
-        scored.append((score, d))
+        # 价格类问法下，收费总表是知识库的价格索引，给一个温和加权（+15%），
+        # 使其在「涉外公证多少钱」这类品类级问价中能与具体条目竞争。
+        raw = score  # 记录未加权总分，供后续「具体事项优先」校正比较
+        if price_q and d.get("id") == "fee":
+            score *= 1.15
+        scored.append((score, d, raw))
     scored.sort(key=lambda x: -x[0])
+    # 价格类问法二次校正：
+    # (a) 若首位具体条目的「事项核心词」根本没出现在问题里（如问「涉外公证
+    #     多少钱」，「涉外」是类目词而非标的，首位却是「涉外赠与协议」），
+    #     说明它是被类目词误召回的噪声，此时应由收费总表接管；
+    # (b) 否则若具体条目原始得分不低于总表原始得分的 8 成，说明用户在问某个
+    #     具体事项的价格，把总表压到该条目之后即可。
+    if price_q:
+        _fee_i = next((i for i, x in enumerate(scored) if x[1].get("id") == "fee"), None)
+        _item = next(((i, x) for i, x in enumerate(scored)
+                      if x[1].get("id", "").startswith("item-")), None)
+        if _fee_i is not None:
+            _core_absent = False
+            if _item and _item[0] == 0:
+                _c = _core_subject(_item[1][1].get("title", ""))
+                _core_absent = (len(_c) >= 2 and _c not in query
+                                and not any(len(f) >= 2 and f in query
+                                            for f in re.split(r"[、，,/\s]+", _c)))
+            if _core_absent and scored[_fee_i][2] >= 1.0:
+                _fe = scored.pop(_fee_i)
+                scored.insert(0, _fe)
+            elif _item and _item[0] > 0 and _item[1][2] >= scored[_fee_i][2] * 0.8:
+                _fe = scored.pop(_fee_i)
+                scored.insert(_item[0], _fe)
     out = []
-    for s, d in scored[:k]:
+    for s, d, _raw in scored[:k]:
         d2 = dict(d)
         d2["_score"] = s
         out.append(d2)
@@ -217,14 +255,26 @@ SUFFIX_WORDS = (
 
 def _core_subject(name):
     """取事项名的核心业务词：去掉编号、大类前缀与类型后缀。"""
-    n = (name or "").strip().split("·")[-1].strip()
+    n = (name or "").strip()
+    # 先剥离所有括号内容：括号里可能含「·」（如「（婚内购买·单独所有）」），
+    # 若先按「·」切分会把括号内的碎片当成事项名。
+    n = re.sub(r"[（(][^）)]*[）)]", "", n)
+    n = n.split("·")[-1].strip()                       # 去大类前缀
     n = re.sub(r"^\d+[\.、]\s*", "", n)               # 去「17. 」「17、」
-    n = re.sub(r"^[（(][^）)]*[）)]", "", n)          # 去「（美国护照申请）」等前缀括号
-    n = re.sub(r"[（(][^）)]*[）)]", "", n)            # 去正文中的补充括号
     n = re.sub(r"^(涉外的?|国内的?)", "", n)          # 去高频通用前缀
     for s in SUFFIX_WORDS:
         n = n.replace(s, "")
     return n.strip(" 、，,-—")
+
+
+def _is_catchall(d):
+    """是否为「兜底桶」事项（如「声明类公证（其他）」）。
+
+    兜底桶本身没有具体标的，不能靠别名或模糊匹配单独认定相关，
+    否则会把不相关事项的材料带出来；必须由具体事项来背书。
+    """
+    nm = (d.get("title") or "").split("·")[-1]
+    return ("其他" in nm) or ("一般" in nm)
 
 
 def hit_is_relevant(query, items):
@@ -234,20 +284,33 @@ def hit_is_relevant(query, items):
     都不算命中，否则会把不相关事项的材料带出来。
     例外：若首位结果得分远超其余（强区分），且核心词与问题有 ≥3 字公共片段，
     也视为命中（应对「公众号主体迁移」vs「微信公众号主体迁移」这类近义表述）。
+    注意：兜底桶事项（其他/一般）不参与独立认定，需由具体事项背书。
     """
     q = (query or "").strip()
     if not q:
         return False
+    # 规则P：价格类问法命中「收费总表」，且总表就是首位结果时，
+    #        视总表为该问法的权威答案，直接认定相关（总表是知识库的价格索引）。
+    #        要求总表排首位，避免「公司章程公证多少钱」这类问题因为总表被
+    #        顺带召回，而把「转让股权」这种无关事项的材料带出来。
+    if (_is_price_q(q) and items and items[0].get("id") == "fee"
+            and items[0].get("_score", 0) >= 1.0):
+        return True
     # 规则0：问题里出现某事项的别名（如「委托买房」→ 1 房屋车辆买卖委托），
-    #        视为直接命中，这是最贴近用户口语的信号
+    #        视为直接命中，这是最贴近用户口语的信号。
+    #        兜底桶不在此列——避免用泛化别名抢走具体/官方事项的路由。
     for alias, no in K.ALIAS_INDEX.items():
         if len(alias) >= 3 and alias in q:
-            if any(d.get("no") == no for d in items):
-                return True
+            for d in items:
+                if d.get("no") == no and not _is_catchall(d):
+                    return True
     q_tokens = {t for t in tokenize(q) if len(t) >= 2 and t not in GENERIC_WORDS}
     for idx, d in enumerate(items):
         name = d.get("title", "")
         core = _core_subject(name)
+        # 兜底桶：核心词无实质含义（如「类」），跳过其独立认定
+        if _is_catchall(d):
+            continue
         if len(core) < 2:
             continue
         # 规则0.5：该事项有别名被问题直接命中
