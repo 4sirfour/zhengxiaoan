@@ -1,807 +1,348 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>证小安 · 公证知识库问答</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>证小安 · 公证问答（微信版）</title>
 <style>
-  :root{
-    --bg:#f5f7fb;--panel:#fff;--ink:#1f2430;--sub:#6b7280;--line:#e6e9ef;
-    --accent:#3b6ef0;--accent-soft:#eaf0ff;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;
-    --ext:#0f8a4a;--ext-bg:#e8f7ee;--int:#b45309;--int-bg:#fef6e7;
-    --shadow:0 6px 24px rgba(20,30,60,.08);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--ink);height:100vh;overflow:hidden;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-    display:flex;flex-direction:column}
+:root{--brand:#3b6ef0;--line:#e4e9f2;--panel:#fff;--bg:#f2f5fa;--muted:#7b8798;--ink:#22314d}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.7 -apple-system,"PingFang SC","Helvetica Neue","Microsoft YaHei",sans-serif}
+#top{background:var(--brand);color:#fff;padding:12px 16px;font-size:15.5px;font-weight:600;
+  display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:9}
+#top .lg{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.2);display:flex;
+  align-items:center;justify-content:center;font-size:13px}
+#top small{font-weight:400;opacity:.85;font-size:11.5px;margin-left:2px}
+#msgs{max-width:640px;margin:0 auto;padding:14px 12px 130px}
+.msg{display:flex;margin:10px 0;align-items:flex-start;gap:8px}
+.msg.u{flex-direction:row-reverse}
+.av{flex:0 0 30px;width:30px;height:30px;border-radius:8px;background:var(--brand);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12.5px;margin-top:2px}
+.msg.u .av{background:#8fa8dd}
+.bub{max-width:82%;padding:10px 13px;border-radius:12px;background:var(--panel);
+  box-shadow:0 1px 2px rgba(20,40,90,.06);white-space:pre-wrap;word-break:break-word;font-size:13.8px}
+.msg.u .bub{background:var(--brand);color:#fff}
+.bub b{font-weight:600}
+.bub .sm{color:var(--muted);font-size:12px}
+.bub .hl{background:#fff7e0;border:1px solid #f0e2b0;border-radius:6px;padding:6px 9px;margin-top:8px;
+  font-size:12.8px;color:#6b5510}
+.bub .ok{color:#0a8f4e;font-weight:600}
+.bub .no{color:#c0392b;font-weight:600}
+.chips{max-width:640px;margin:4px auto 0;padding:0 12px;display:flex;flex-wrap:wrap;gap:7px}
+.chips button{border:1px solid var(--line);background:#fff;border-radius:15px;padding:6px 12px;
+  font-size:12.5px;color:#3c4c6b}
+.chips button:active{background:#eef2fb}
+#composer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);
+  border-top:1px solid var(--line);padding:9px 10px calc(9px + env(safe-area-inset-bottom))}
+.cwrap{max-width:640px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+.cwrap textarea{flex:1;border:1px solid var(--line);border-radius:10px;padding:9px 11px;
+  font-size:14px;resize:none;outline:0;height:42px;max-height:110px;line-height:1.5;background:var(--bg)}
+.cwrap button{border:0;background:var(--brand);color:#fff;border-radius:10px;padding:10px 17px;font-size:14px}
+.cwrap button:disabled{background:#c7d2e8}
 
-  /* ---------- header ---------- */
-  header{height:58px;flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:0 18px;
-    background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--shadow);z-index:20;position:relative}
-  header .logo{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;
-    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:0 0 auto}
-  header h1{font-size:16px;margin:0;font-weight:650;white-space:nowrap}
-  header .hint{font-size:12px;color:var(--sub);white-space:nowrap}
-  header .spacer{flex:1}
-  header .toggle{display:none;border:1px solid var(--line);background:#fff;border-radius:8px;
-    padding:6px 10px;font-size:13px;cursor:pointer}
+/* ===== GitHub Pages 桌面端适配（仅宽屏生效，移动端不受影响） ===== */
+@media (min-width: 760px) {
+  body { background: linear-gradient(160deg,#eef3fb 0%,#e7edf8 100%) !important;
+    display: flex !important; justify-content: center !important;
+    align-items: flex-start !important; padding: 28px 0 40px !important; min-height: 100vh !important; }
+  body > * { width: 100%; max-width: 680px !important;
+    margin-left: auto !important; margin-right: auto !important; }
+  #top { border-radius: 16px 16px 0 0 !important; box-shadow: 0 10px 30px rgba(30,50,90,.10) !important; }
+  #wrap, #main, #list, #chat, .wrap, .main, .app {
+    box-shadow: 0 18px 46px rgba(30,50,90,.12) !important;
+    border-radius: 0 0 16px 16px !important; background: #fff !important; }
+}
+@media (min-width: 1100px) { body > * { max-width: 720px !important; } }
 
-  /* ---------- 模型选择器 ---------- */
-  .model-sel{position:relative;flex:0 0 auto}
-  .model-btn{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;
-    padding:7px 12px;border-radius:9px;font-size:13px;cursor:pointer;transition:.15s;max-width:250px}
-  .model-btn:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(59,110,240,.12)}
-  .model-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:0 0 auto}
-  .model-btn .dot.off{background:#cbd5e1}
-  .model-btn .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .model-btn .arrow{color:var(--sub);font-size:10px;margin-left:2px}
-  .model-menu{position:absolute;top:calc(100% + 8px);right:0;width:340px;max-height:70vh;overflow:auto;
-    background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(20,30,60,.16);
-    padding:8px;display:none;z-index:100}
-  .model-menu.show{display:block}
-  .model-menu .mh{padding:8px 10px 6px;font-size:11px;color:var(--sub);font-weight:600;letter-spacing:.4px}
-  .mopt{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:.12s}
-  .mopt:hover{background:var(--accent-soft)}
-  .mopt.sel{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
-  .mopt .mk{width:16px;flex:0 0 auto;color:var(--accent);font-weight:700;font-size:13px;line-height:1.5}
-  .mopt .mb{flex:1;min-width:0}
-  .mopt .mt{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
-  .mopt .md{font-size:11.5px;color:var(--sub);margin-top:2px;line-height:1.5}
-  .tag{font-size:10px;padding:1.5px 6px;border-radius:5px;font-weight:600;white-space:nowrap}
-  .tag.free{background:#e8f7ee;color:#0f8a4a}
-  .tag.nokey{background:#fee2e2;color:#b91c1c}
-  .tag.ready{background:#e0eaff;color:#2c50c0}
-  .model-menu .mfoot{border-top:1px solid var(--line);margin-top:6px;padding:8px 10px 4px;font-size:11.5px;color:var(--sub)}
-
-  /* ---------- header buttons ---------- */
-  header .hbtn{border:1px solid var(--line);background:#fff;padding:7px 12px;border-radius:9px;
-    font-size:13px;cursor:pointer;transition:.15s;white-space:nowrap}
-  header .hbtn:hover{border-color:var(--accent);color:var(--accent)}
-  header .hbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-
-  /* ---------- layout ---------- */
-  .layout{flex:1;display:flex;min-height:0}
-  .side{width:390px;flex:0 0 390px;background:var(--panel);border-right:1px solid var(--line);
-    display:flex;flex-direction:column;min-height:0}
-  .side .sh{padding:13px 15px 9px;display:flex;align-items:center;justify-content:space-between}
-  .side .sh b{font-size:14px}
-  .side .sh small{color:var(--sub);font-size:11px;font-weight:400}
-  .ssearch{margin:0 13px 9px}
-  .ssearch input{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 12px;
-    font-size:13px;outline:none;transition:.15s}
-  .ssearch input:focus{border-color:var(--accent)}
-  .toc{flex:1;overflow:auto;padding:0 10px 12px}
-  .lockbox{text-align:center;padding:46px 18px;color:#6b7280}
-  .lockbox .lt{font-size:15px;font-weight:600;color:#374151;margin:10px 0 6px}
-  .lockbox .ld{font-size:12.5px;line-height:1.7}
-  .drow{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed #e5e7eb;font-size:13.5px;line-height:1.65}
-  .drow:last-child{border-bottom:none}
-  .drow .dk{flex:0 0 92px;color:#6b7280}
-  .drow .dv{flex:1;color:#111827}
-  .grp{border:1px solid var(--line);border-radius:11px;margin-bottom:8px;background:#fbfcfe;overflow:hidden}
-  .grp>summary{list-style:none;cursor:pointer;padding:10px 12px;font-size:13px;font-weight:650;
-    display:flex;align-items:center;gap:8px}
-  .grp>summary::-webkit-details-marker{display:none}
-  .grp>summary .cnt{font-size:11px;color:var(--sub);font-weight:400;margin-left:auto;white-space:nowrap}
-  .grp .body{padding:2px 10px 10px}
-  .it{border-radius:9px;padding:8px 10px;margin-bottom:5px;cursor:pointer;transition:.12s;background:#fff;
-    border:1px solid var(--line)}
-  .it:hover{border-color:var(--accent);background:var(--accent-soft)}
-  .it .r1{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;line-height:1.45}
-  .it .pn{color:var(--sub);font-weight:400;flex:0 0 auto}
-  .it .pr{font-size:11px;color:var(--sub);margin-top:4px}
-  .cb{width:15px;height:15px;border-radius:4px;flex:0 0 auto;border:1.5px solid #cbd5e1;
-    display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;color:#fff}
-  .cb.y{background:var(--ext);border-color:var(--ext)}
-  .cb.n{background:#fff;border-color:#cbd5e1;color:transparent}
-  .it.no{background:#fffdf7;border-color:#f3e3c3}
-  .it.no:hover{border-color:var(--warn);background:var(--int-bg)}
-  .it.no .r1{color:#6b7280}
-
-  /* ---------- chat ---------- */
-  main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
-  .msgs{flex:1;overflow:auto;padding:22px 26px 8px}
-  .empty{max-width:760px;margin:5vh auto 0;text-align:center;color:var(--sub)}
-  .empty .big{font-size:40px;margin-bottom:12px}
-  .empty .tt{font-size:19px;font-weight:650;color:var(--ink);margin-bottom:8px}
-  .empty .dd{font-size:13.5px;line-height:1.75;margin-bottom:20px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:660px;margin:0 auto}
-  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:8px 15px;font-size:12.5px;
-    cursor:pointer;transition:.15s;color:var(--ink)}
-  .chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
-
-  .msg{margin-bottom:20px;display:flex;gap:11px}
-  .msg .av{width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;
-    justify-content:center;font-size:14px;font-weight:700}
-  .msg.u{flex-direction:row-reverse}
-  .msg.u .av{background:var(--accent);color:#fff}
-  .msg.a .av{background:#e8eefc;color:var(--accent)}
-  .bub{max-width:min(760px,78%);border-radius:12px;padding:13px 16px;font-size:13.5px;line-height:1.8;
-    white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
-  .msg.u .bub{background:var(--accent);color:#fff}
-  .msg.a .bub{background:#fff;border:1px solid var(--line);box-shadow:0 1px 3px rgba(20,30,60,.04)}
-  .meta{font-size:11px;color:var(--sub);margin-top:9px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .meta .b{background:#f1f4f9;border-radius:6px;padding:2px 7px}
-  .meta .b.warn{background:var(--int-bg);color:var(--int)}
-  .meta .b.ok{background:var(--ext-bg);color:var(--ext)}
-  .srcs{margin-top:10px;border-top:1px dashed var(--line);padding-top:9px;font-size:11.5px;color:var(--sub)}
-  .srcs .s{display:block;margin-top:3px}
-
-  .composer{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);padding:13px 26px 15px}
-  .cwrap{max-width:900px;margin:0 auto}
-  .ibox{display:flex;gap:10px;align-items:flex-end;border:1px solid var(--line);border-radius:12px;
-    padding:8px 8px 8px 14px;background:#fff;transition:.15s}
-  .ibox:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,110,240,.09)}
-  .ibox textarea{flex:1;border:0;outline:0;resize:none;font-size:13.5px;line-height:1.65;
-    max-height:140px;min-height:24px;font-family:inherit;padding:4px 0;background:transparent}
-  .ibox button{border:0;background:var(--accent);color:#fff;border-radius:9px;padding:9px 18px;
-    font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;flex:0 0 auto}
-  .ibox button:hover{background:#2f5cd8}
-  .ibox button:disabled{background:#c7d2e8;cursor:not-allowed}
-  .ibox button.ghost{background:#eef2fb;color:#42526e;padding:9px 12px}
-  .ibox button.ghost:hover{background:#e0e7f7}
-  .imgs{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-  .imgs .it{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
-  .imgs .it img{width:100%;height:100%;object-fit:cover;display:block}
-  .imgs .it .rm{position:absolute;top:0;right:0;width:18px;height:18px;border:0;border-radius:0 0 0 6px;
-    background:rgba(20,30,55,.72);color:#fff;font-size:11px;line-height:18px;cursor:pointer;padding:0}
-  .imgs .hint{font-size:11.5px;color:var(--muted);align-self:center}
-  .chint{font-size:11.5px;color:var(--sub);margin-top:8px;display:flex;justify-content:space-between;gap:10px}
-  .f4{display:flex;gap:5px;flex-wrap:wrap}
-  .f4 .f{border-radius:6px;padding:2px 7px;font-size:11px;background:#f1f4f9;color:var(--sub)}
-  .f4 .f.on{background:var(--ext-bg);color:var(--ext)}
-  .f4 .f.miss{background:var(--int-bg);color:var(--int)}
-
-  .typing{display:flex;gap:4px;padding:4px 0}
-  .typing i{width:6px;height:6px;border-radius:50%;background:#b9c4d6;animation:bl 1.1s infinite}
-  .typing i:nth-child(2){animation-delay:.18s}
-  .typing i:nth-child(3){animation-delay:.36s}
-  @keyframes bl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
-
-  /* ---------- modal ---------- */
-  .mask{position:fixed;inset:0;background:rgba(20,30,60,.42);display:none;align-items:center;
-    justify-content:center;z-index:200;padding:20px}
-  .mask.show{display:flex}
-  .modal{background:#fff;border-radius:15px;width:100%;max-width:600px;max-height:88vh;overflow:auto;
-    box-shadow:0 24px 70px rgba(20,30,60,.28)}
-  .modal .mh2{padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;
-    align-items:center;justify-content:space-between}
-  .modal .mh2 b{font-size:16px}
-  .modal .mh2 .x{border:0;background:transparent;font-size:20px;cursor:pointer;color:var(--sub);line-height:1}
-  .modal .mb2{padding:18px 22px 22px}
-  .fld{margin-bottom:16px}
-  .fld label{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px}
-  .fld .desc{font-size:11.5px;color:var(--sub);font-weight:400;margin-left:6px}
-  .fld input,.fld select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;
-    font-size:13px;outline:none;font-family:inherit;transition:.15s}
-  .fld input:focus,.fld select:focus{border-color:var(--accent)}
-  .fld .hint{font-size:11px;color:var(--sub);margin-top:5px;line-height:1.6}
-  .prow{border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:10px}
-  .prow .pn2{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-  .prow .pn2 b{font-size:13px}
-  .prim{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:10px 20px;
-    font-size:13.5px;font-weight:600;cursor:pointer;width:100%}
-  .prim:hover{background:#2f5cd8}
-  .warnbox{background:var(--int-bg);border:1px solid #f3e3c3;border-radius:9px;padding:11px 13px;
-    font-size:12px;line-height:1.7;color:#7c4a03;margin-bottom:16px}
-  .okline{color:var(--ok);font-size:12px;margin-top:8px}
-
-  /* ---------- 报价 / 表格 ---------- */
-  table.qt{width:100%;border-collapse:collapse;font-size:12px}
-  table.qt th,table.qt td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
-  table.qt th{background:#f8fafc;font-weight:650}
-  table.qt tr:nth-child(even) td{background:#fcfdff}
-
-  @media (max-width:900px){
-    .side{position:absolute;left:0;top:58px;bottom:0;z-index:30;transform:translateX(-100%);
-      transition:.22s;box-shadow:var(--shadow);width:88%}
-    .side.open{transform:none}
-    header .toggle{display:inline-block}
-    header .hint{display:none}
-    .model-btn{max-width:150px}
-    .bub{max-width:88%}
-  }
 </style>
 </head>
 <body>
-
-<header>
-  <button class="toggle" id="tgSide">☰</button>
-  <div class="logo">证</div>
-  <h1>证小安 · 公证知识库问答</h1>
-  <span class="hint">· 四要素分析 · 答案可溯源</span>
-  <div class="spacer"></div>
-
-  <!-- 右上角模型选择器 -->
-  <div class="model-sel">
-    <button class="model-btn" id="modelBtn">
-      <span class="dot" id="mDot"></span>
-      <span class="nm" id="mName">加载中…</span>
-      <span class="arrow">▼</span>
-    </button>
-    <div class="model-menu" id="modelMenu"></div>
-  </div>
-
-  <button class="hbtn" id="btnView" title="切换当事人/管理员视图">👁 当事人视图</button>
-  <button class="hbtn" id="btnCfg">⚙️ 配置</button>
-</header>
-
-<div class="layout">
-  <aside class="side" id="side">
-    <div class="sh"><b>📚 知识库目录</b><small id="kbStat">…</small></div>
-    <div class="ssearch"><input id="q" placeholder="搜索事项、类别、材料…"></div>
-    <div class="toc" id="toc"></div>
-  </aside>
-
-  <main>
-    <div class="msgs" id="msgs">
-      <div class="empty" id="emptyState">
-        <div class="big">💬</div>
-        <div class="tt">先问清楚四要素，再给办理结论</div>
-        <div class="dd">
-          我会围绕「办什么公证 · 户籍在哪儿 · 在哪儿使用 · 用途是什么」分析你的问题，<br>
-          缺哪一项就问你哪一项，而不是直接丢一段资料给你。
-        </div>
-        <div class="chips">
-          <button class="chip">我户籍在四川，房子在北京，想办卖房委托，拿到美国用</button>
-          <button class="chip">放弃继承权声明怎么办</button>
-          <button class="chip">孩子出国留学要办什么公证</button>
-          <button class="chip">涉外学历公证多少钱</button>
-          <button class="chip">股权转让能线上办吗</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="composer">
-      <div class="cwrap">
-        <div class="ibox">
-          <button type="button" class="ghost" id="imgBtn" title="上传图片识别（证件/截图/文书，最多 4 张）">📎 图片</button>
-          <input type="file" id="imgFile" accept="image/*" multiple style="display:none">
-          <textarea id="inp" rows="1" placeholder="描述你的公证需求，或上传图片识别，尽量说清四要素…（Enter 发送，Shift+Enter 换行）"></textarea>
-          <button id="send">发送</button>
-        </div>
-        <div class="imgs" id="imgBar" style="display:none"></div>
-        <div class="chint">
-          <div class="f4" id="f4bar"></div>
-          <div id="modeHint">四要素越完整，结论越准</div>
-        </div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<!-- 配置弹窗 -->
-<div class="mask" id="cfgMask">
-  <div class="modal">
-    <div class="mh2"><b>⚙️ 模型与服务配置</b><button class="x" data-close="cfgMask">×</button></div>
-    <div class="mb2">
-      <div class="warnbox">
-        <b>关于 API Key：</b>本服务默认不预置任何厂商密钥。填写后仅保存在本服务本地
-        <code>config.json</code>，不会外传。DeepSeek / 豆包 / 智谱 / 通义均有<b>免费额度</b>，
-        申请后填入即可启用对应的模型分析能力。<br>
-        未配置密钥时，问答会自动降级为「知识库检索」模式，功能仍可用。
-      </div>
-
-      <div class="fld">
-        <label>默认模型 <span class="desc">打开页面时默认选中</span></label>
-        <select id="setModel"></select>
-      </div>
-      <div class="fld">
-        <label>检索条数 Top-K</label>
-        <input type="number" id="setK" min="1" max="10" value="4">
-      </div>
-      <div class="fld">
-        <label>回答温度 temperature <span class="desc">越低越稳定，建议 0.1–0.3</span></label>
-        <input type="number" id="setTemp" step="0.1" min="0" max="1" value="0.2">
-      </div>
-      <div class="fld">
-        <label>管理员密码 <span class="desc">进入「🔓 管理员视图」所需的验证密码</span></label>
-        <input type="text" id="setPass" placeholder="不修改请留空" autocomplete="off">
-      </div>
-
-      <div id="provRows"></div>
-
-      <button class="prim" id="saveCfg">保存配置</button>
-      <div class="okline" id="cfgOk"></div>
-    </div>
-  </div>
-</div>
-
-<!-- 报价弹窗 -->
-<div class="mask" id="feeMask">
-  <div class="modal" style="max-width:900px">
-    <div class="mh2"><b id="feeTitle">收费标准</b><button class="x" data-close="feeMask">×</button></div>
-    <div class="mb2" id="feeBody"></div>
-  </div>
-</div>
-
-<!-- 事项详情弹窗 -->
-<div class="mask" id="detMask">
-  <div class="modal" style="max-width:640px">
-    <div class="mh2"><b id="detTitle">事项详情</b><button class="x" data-close="detMask">×</button></div>
-    <div class="mb2" id="detBody"></div>
-    <div style="padding:0 18px 16px;text-align:right">
-      <button class="hbtn" id="detAsk" style="background:#2563eb;color:#fff;border-color:#2563eb">💬 就此事提问</button>
-    </div>
-  </div>
-</div>
-
-<!-- 管理员密码弹窗 -->
-<div class="mask" id="pwMask">
-  <div class="modal" style="max-width:360px">
-    <div class="mh2"><b>🔐 管理员验证</b><button class="x" data-close="pwMask">×</button></div>
-    <div class="mb2">
-      <div class="fld">
-        <label>管理员密码 <span class="desc">进入内部视图需验证；可在「⚙️ 配置」中修改</span></label>
-        <input type="password" id="pwInput" placeholder="请输入管理员密码" autocomplete="off">
-      </div>
-      <div id="pwErr" style="color:#dc2626;font-size:12.5px;min-height:18px"></div>
-      <button class="prim" id="pwOk" style="width:100%">验证并进入管理员视图</button>
-    </div>
-  </div>
-</div>
-
+<div id="top"><span class="lg">证</span>证小安 · 公证问答<small>微信版</small></div>
+<div id="msgs"></div>
+<div class="chips" id="chips"></div>
+<div id="composer"><div class="cwrap">
+  <textarea id="inp" rows="1" placeholder="描述您的公证需求…"></textarea>
+  <button id="send">发送</button>
+</div></div>
 <script>
-const $ = s => document.querySelector(s);
-const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const api = async (p, o={}) => {
-  const r = await fetch(p, Object.assign({headers:{'Content-Type':'application/json'}}, o));
-  const d = await r.json().catch(()=>({}));
-  if(!r.ok && d.error) throw new Error(d.error);
-  return d;
-};
+const KB = {"kb":[{"no":1,"ok":true,"name":"房屋、车辆买卖委托","cat":"一、委托类","fields":[["办什么公证","房屋买卖委托 / 车辆买卖委托（委托人授权受托人代为办理交易、过户、结按等手续）"],["户籍在哪儿","不限户籍所在地；需提前确认当地房管局、车管局是否认可外省公证书"],["在哪儿使用","国内房管局、车管局；涉外的按使用地要求并配海牙认证"],["用途是什么","代为出售房屋或车辆、代办过户与交易手续"],["要求","一般都能做，需看具体代办事项。卖房款项不能代收。外国房产无法核实，不能做。产权性质为军产房、或工厂（权利性质为国有建设用地使用权）的，无法办理"],["材料","卖房身份材料复印件需打印几份并盖章，直接附在公证书证词后面；委托人身份证及电话、户口本（首页/户主页/委托人页）、婚姻证明材料（结婚证/离婚证/判决书/生效证明/民政局盖章离婚协议需每一页）、房屋产权证（所有页）、房屋档案（可在天府市民云打印登记簿）、受托人身份证及电话"],["线上办理","支持「零接触」公证平台线上办理：实名认证后使用电子签名在《委托书》上签署，公证书证明委托行为符合《民法典》第一百四十三条、电子签名符合《电子签名法》第十三条（参照鞍山公证处出具示例）"],["示例文书要点","《委托书》通常包含：①委托人/受托人身份信息；②房产坐落与产权登记号（共同共有需全部产权人共同委托）；③逐项列明代办事项（查档取资料、签买卖合同及网签备案、转移过户登记、缴纳税费、查询住宅登记信息、免资金监管、注销抵押、物业交割与水电气过户、户籍迁移、产证破损遗失补办等）；④委托期限（示例：自委托之日起二年内有效）；⑤是否含转委托权；⑥电子签名与笔签同等效力的特别声明"],["买卖委托模板（卖方）","实操两套模板之一，用于出售房产。代办事项共 10 项：①查档、提取复制档案票据、办理地址变更；②代为出售、签买卖合同及网签备案/撤销、预告登记、经纪服务合同；③转移过户登记、代领不动产权证、更正登记；④税务核定与缴税（契税/增值税/个税）、专项维修资金、划拨转出让、代开发票；⑤查询领取个人及家庭成员住房登记信息；⑥免资金监管手续；⑦注销抵押登记；⑧物业交割、水电气/宽带过户；⑨户籍迁入迁出、领取户口本或户籍证明；⑩产证破损换证、登报遗失声明、挂失补办。**含转委托权**，委托期限多为一年或二年"],["购买委托模板（买方）","实操两套模板之二，用于购买房产。代办事项共 7 项：①签署不动产买卖合同；②个人产权调查查询；③转移/变更/更正/过户登记、代领不动产权证；④缴纳房产税费及费用；⑤二手房按揭贷款及抵押登记；⑥人民银行征信查询；⑦附属设施过户（物业、水电气、电话、有线电视）。**无转委托权**，委托期限固定二年。购买后登记为「委托人一人名下」或「委托人共同所有」，需在委托书中写明"],["共有人处理","登记为「单独所有」与「共同所有」表述不同：单独所有写「登记为委托人单独所有」；共同所有写「登记为委托人共同所有」，且**全部共有人均为委托人**、需共同签署。婚内购买但登记单独所有的，另见第 3 条（需配偶知情同意）"]],"alias":["委托买房","买房委托","房屋买卖委托","房产委托","卖房委托","车辆买卖委托","买车委托","房产购买委托","房产买卖委托","购买委托","代购房产"]},{"no":2,"ok":true,"name":"房屋委托结按、注销抵押","cat":"一、委托类","fields":[["办什么公证","房屋委托公证（授权受托人代为结清按揭、注销抵押登记）"],["户籍在哪儿","不限户籍所在地；房屋须在可核实范围内"],["在哪儿使用","房屋所在地不动产登记中心、银行"],["用途是什么","代为结清贷款、办理抵押注销"],["材料","委托人身份证及电话、户口本（首页/户主页/委托人页）、婚姻证明材料（结婚证/离婚证/判决书/生效证明/民政局盖章离婚协议需每一页）、房屋产权证（所有页）、房屋档案（可在天府市民云打印登记簿）、受托人身份证及电话"]],"alias":["结按","注销抵押","赎楼","解除抵押","房屋结按注销抵押","抵押注销"]},{"no":3,"ok":true,"name":"房产委托公证（婚内购买·单独所有）","cat":"一、委托类","fields":[["办什么公证","房屋委托公证（婚内购买但登记为单独所有房产的处置委托）"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内房管局、不动产登记中心；涉外按使用地要求并配海牙认证"],["用途是什么","代为处置婚内购买但登记为单独所有的房产"],["要求","不能只由产权人一方办理。婚内购买的房产属于婚内财产，即使登记为单独所有，也需配偶知情同意"],["配偶配合方式","东北三省、安徽、江西、福建、重庆、新疆 以外省份：需女方手持声明同意书拍照；上述六地按当地口径另行确认"],["材料","参照房屋买卖委托材料：委托人身份证及电话、户口本（首页/户主页/委托人页）、婚姻证明材料、房屋产权证（所有页）、房屋档案、受托人身份证及电话；另需配偶手持声明同意书拍照（六地除外）"]],"alias":["婚内房产委托","单独所有房产委托","夫妻房产委托"]},{"no":4,"ok":false,"name":"委托涉及矿产类","cat":"一、委托类","fields":[["结论","不可办理（属暂不受理范围）"],["办什么公证","涉及矿产资源权益的委托事项"],["户籍在哪儿","—"],["在哪儿使用","—"],["用途是什么","涉及矿产资源权益的委托"],["要求","属暂不受理范围；如当事人咨询，请引导至线下受理窗口确认"],["材料",""]],"alias":["矿产委托","矿产类委托"]},{"no":5,"ok":true,"name":"放弃继承权声明公证","cat":"二、声明类","fields":[["办什么公证","放弃继承权声明书公证（声明人自愿放弃对特定遗产的继承权）"],["户籍在哪儿","一般不限；遗产在境内的按遗产所在地公证处口径，跨省建议提前确认"],["在哪儿使用","遗产所在地不动产登记中心、银行、法院；国内使用为主"],["用途是什么","明确放弃继承，便于其他继承人办理继承登记或过户"],["要求","材料齐全后进行视频签署公证，视频时需准备身份证。外籍人士需到派出所或外事办开具\"与之前人名为同一人\"的证明。同函规则：多人放弃可放一份，兄弟姐妹放一起、长辈放一起，但两者不能混放"],["材料","身份证、户口本、护照（声明书在国内用则不需要）、死亡证明、放弃声明（需写明具体财产数目）、遗产相关权证"],["声明书要点","放弃继承权声明书需写明：声明人姓名/性别/出生日期/身份证号/工作单位/家庭住址/联系电话；被继承人姓名及死亡时间地点；遗产具体坐落与权证号（如「房权证号：哈市房字第XXXX号，建筑面积XX平方米」）；如属夫妻共同财产，注明「上述夫妻财产的一半为被继承人的遗产」；核心声明「自愿放弃上述遗产的继承权，并清楚此放弃行为不可撤销，且保证没有逃避债务履行及法定义务的履行」"],["案例（多人同案）","被继承人田宝英（2008 年在哈密市病故）遗有哈密市铁路24街房屋一套。4 名亲属（田宝琴、田宝玲、田宝昌、田宝珍）+ 其子赵鑫分别出具独立声明书放弃继承，各 2 份。兄弟姐妹与晚辈各自一份，未混放于同一份声明中"]],"alias":["放弃继承","放弃继承权","放弃继承声明"]},{"no":6,"ok":true,"name":"声明类公证（其他）","cat":"二、声明类","fields":[["办什么公证","各类声明书公证（除已单列事项外的声明类）"],["户籍在哪儿","一般不限，视具体声明事项确定"],["在哪儿使用","国内使用为主；涉外另计并配海牙认证"],["用途是什么","依当事人具体声明内容确定"],["要求","一般都能做，需看具体事项"],["材料",""]],"alias":["其他声明","一般声明","声明类公证"]},{"no":7,"ok":true,"name":"出国留学（父母声明承担留学费用）","cat":"二、声明类","fields":[["办什么公证","父母声明承担子女留学费用声明书公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","境外学校、使领馆及签证审核机构"],["用途是什么","用于子女出国留学签证的资金担保与费用承担证明"],["要求","配海牙认证"],["材料","父母双方身份证、户口本、结婚证、收入或在职证明、子女留学相关材料"]],"alias":["留学费用声明","出国留学费用","父母声明承担留学费用","留学资金声明"]},{"no":8,"ok":true,"name":"出国随行/不随行公证（出行同意书/不随行监护人同意公证）","cat":"二、声明类","fields":[["办什么公证","未成年人出行同意书公证 / 不随行监护人同意公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","出境口岸、目的地国使领馆及入境审核机构"],["用途是什么","未成年人随一方父母或他人出境时，证明另一方监护人知情同意"],["要求","多个孩子需分开办理，不能办在同一份公证书上"],["材料",""]],"alias":["出行同意书","不随行同意","随行不随行","监护人同意书","出国同意书"]},{"no":9,"ok":true,"name":"DS-3053 声明公证（美国护照申请）","cat":"二、声明类","fields":[["办什么公证","DS-3053 声明公证（父母一方不能到场时，同意为孩子办理美国护照的声明）"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","美国（用于为孩子申请美国护照）"],["用途是什么","委托给孩子办护照，证明父母另一方知情同意"],["价格","对外报价：599 元起（小程序涉外档）。实操成交价：美国出生纸已有海牙认证 1200 元；无海牙认证 1300 元"],["材料","DS-3053 表格、父母双方身份证件与护照、孩子出生纸（含海牙认证情况）、不能到场一方的身份材料"]],"alias":["DS3053","ds-3053","美国护照声明","父母一方同意办护照"]},{"no":10,"ok":true,"name":"婚前财产约定（婚前）","cat":"三、财产约定与协议类","fields":[["办什么公证","婚前财产约定协议公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内为主；涉外按使用地要求并配海牙认证"],["用途是什么","明确婚前各自财产范围与归属，预防婚后财产争议"],["要求","可以办理，可以线上办理。内容有可能限制，需提前沟通清楚：措辞不宜过分，例如约定「XX 出轨如何处置」这类涉及人身关系或道德评判的条款不予受理"],["材料","双方身份证、户口本、拟约定的财产权属证明（房产证、车辆登记证、存款证明、股权凭证等）、协议书文本"]],"alias":["婚前财产","婚前财产约定协议","婚前协议","婚前财产公证"]},{"no":11,"ok":true,"name":"夫妻财产约定协议（婚内）","cat":"三、财产约定与协议类","fields":[["办什么公证","夫妻财产约定协议公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内为主；涉外按使用地要求并配海牙认证"],["用途是什么","约定婚内财产归属与债务承担，用于财产确权或融资场景"],["要求","可以办理，具体内容可能有限制，需提前沟通清楚"],["案例","婚内财产协议公证，约定财产归属，标的可包括现金、车辆、房屋等各类财产的归属约定，这类公证可以做"],["材料","夫妻双方身份证、户口本、结婚证、财产权属证明（房产证、车辆登记证、存款凭证等）、协议书文本"]],"alias":["婚内财产协议","夫妻财产约定","婚内财产约定","夫妻财产协议","婚内财产公证"]},{"no":12,"ok":true,"name":"离婚财产分割协议","cat":"三、财产约定与协议类","fields":[["办什么公证","离婚财产分割协议公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内为主；涉外按使用地要求并配海牙认证"],["用途是什么","固定离婚后财产分割约定，用于不动产过户、财产确权"],["要求","可以办理，具体内容可能有限制，需提前沟通清楚"],["材料","双方身份证、户口本、离婚证/离婚判决书及生效证明、财产权属证明、财产分割协议文本"]],"alias":["离婚财产分割","离婚协议财产分割","离婚后财产分割"]},{"no":37,"ok":true,"name":"离婚补充协议公证","cat":"三、财产约定与协议类","fields":[["办什么公证","离婚补充协议公证（对已生效的离婚协议中遗漏或约定不明的财产作补充约定）"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内不动产登记中心、银行等；办理过户或确权时使用"],["用途是什么","原离婚协议未对某项共同财产作出分割约定时，双方补充约定归属。常见于离婚后新办出房产证、或离婚协议遗漏房产的情形"],["要求","双方均需到场（或按当地口径线上签署）；补充协议内容不得与原离婚协议冲突，仅对遗漏事项作补充，并写明「其它事项遵照原离婚协议执行」；需提供原离婚证及原离婚协议书"],["材料","双方身份证、户口本、离婚证及原离婚协议书、补充协议文本、涉及房产的提供不动产权证书（含法院执行裁定书等权属来源文件）"],["案例","2025-08 协议离婚，原离婚协议未约定北京某房产归属。该房产系婚姻存续期间经山西忻州忻府区法院执行裁定所得、登记在男方名下。双方补充协议约定该房屋产权归男方一人所有、女方不主张权利，其它事项遵照原离婚协议执行"]],"alias":["离婚补充协议","补充离婚协议","离婚协议补充","离婚后补充约定"]},{"no":13,"ok":true,"name":"协议/合同公证（一般）","cat":"三、财产约定与协议类","fields":[["办什么公证","协议公证、赠与合同公证（如车辆买卖协议、赠与合同）"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内为主；涉外按使用地要求并配海牙认证"],["用途是什么","固定双方合意，用于车辆过户（出售/赠与）、财产处置等"],["说明","车辆过户方式多样（出售、赠与），可做协议公证或赠与合同公证；需委托别人代办相关事项的做委托公证"],["材料",""]],"alias":["一般合同","一般协议"]},{"no":14,"ok":true,"name":"资金赠与协议（赠与朋友 · 国内使用）","cat":"三、财产约定与协议类","fields":[["办什么公证","赠与合同 / 赠与协议公证（货币资金无偿赠与）"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内使用（前提一：涉外的赠予类公证书出去不能用，存在转移资产嫌疑）"],["用途是什么","无偿赠与资金给朋友，固定赠与合意，用于资金归属证明"],["要求","可以做，须同时满足两个前提：① 国内使用；② 提供资金来源合法收入证明"],["材料","双方身份材料、资金来源合法收入证明（如工资流水、纳税记录等）、赠与协议文本"]],"alias":["资金赠与","赠与朋友","赠与资金","国内赠与"]},{"no":15,"ok":true,"name":"涉外赠与协议/赠与声明","cat":"三、财产约定与协议类","fields":[["办什么公证","赠与协议公证 / 赠与声明公证 + 海牙认证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","境外使用（涉外）"],["用途是什么","财产赠与。意识清醒等状态下可以赠与；部分客户本想做遗嘱公证的，也会引导推赠与公证"],["要求","涉外赠予可以办理，具体得看赠与协议或赠与声明的内容。费用要结合文本内容涉及的金额计算"],["使用地限制","境外使用时，要求赠与人与受赠人有亲属关联；最终以文本内容审核为准"],["注意","父母赠与孩子大额资金用于留学，不受理；涉外公证书赠予类因转移资产嫌疑，境外机构可能不予认可"],["材料","双方身份材料、亲属关系证明、赠与协议或赠与声明文本、财产权属与金额证明"]],"alias":["涉外赠与","涉外赠予","赠与声明","境外赠与","赠与协议"]},{"no":16,"ok":false,"name":"公司股权协议和分红协议","cat":"三、财产约定与协议类","fields":[["结论","不可办理（复杂，线上做不了）"],["办什么公证","公司股权安排与分红约定协议公证"],["户籍在哪儿","—"],["在哪儿使用","—"],["用途是什么","公司股权安排与分红约定"],["要求","涉及公司治理与实质性审查，需线下受理"],["材料",""]],"alias":["股权协议","分红协议","公司股权协议"]},{"no":17,"ok":false,"name":"转让股权","cat":"三、财产约定与协议类","fields":[["结论","不可办理（线上不受理）"],["办什么公证","股权转让协议公证"],["户籍在哪儿","—"],["在哪儿使用","—"],["用途是什么","股权转让"],["要求","转让股权的都需要实质审查股权真实性；如果公司有港资，还需香港持有公证资格的律师对营业执照和公司章程进行审查并出具证明，这种线上不受理"],["说明","涉及股东变更与实质性审查，需线下受理；涉港资公司另需香港持证律师审查并出具证明"],["材料",""]],"alias":["股权转让","转让股权","股权转让协议","股权转让公证"]},{"no":18,"ok":true,"name":"签字、印鉴公证","cat":"四、签字、印鉴类","fields":[["办什么公证","签字属实公证、印鉴属实公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内及外文文件使用地；印章类公证在日本用途较多"],["用途是什么","证明当事人在文件上的签字或印章真实，用于外文文件签署（如给孩子在国外申请护照）、公司文件盖章等"],["要求","在外文文件上签字可以做（如给孩子在国外申请护照）。印章类公证一般在日本用途较多"],["材料","户口本（首页、户主页、本人页面）、身份证正反面、护照、签字声明书"],["印章声明书要点","声明书需写明：声明人姓名、性别、出生日期、身份证号、国籍、户籍地址；正文声明「以下为我的签名印章样本」，附签名及印章样本；结尾「我保证上述声明内容完全真实，若有不实愿承担法律责任」。印章公证常用于日本业务，需配日文翻译"],["案例","山西户籍客户办印章公证、日本翻译、5 份：材料为身份证、户口本、护照 + 印章声明书（含签名及印章样本）"]],"alias":["签字公证","印鉴公证","签名公证","印章公证","印章声明书"]},{"no":19,"ok":true,"name":"微信公众号主体迁移（签字、印鉴公证）","cat":"四、签字、印鉴类","fields":[["办什么公证","签字、印鉴公证（用于微信公众号主体迁移申请）"],["户籍在哪儿","不限户籍所在地（针对双方法定代表人）"],["在哪儿使用","腾讯微信平台主体变更审核"],["用途是什么","微信公众号运营主体由原公司变更为另一公司"],["方式一","电子章方式，流程和签字一样"],["方式二","两法人可分别在不同时间视频，也可同一公证员对两人分别视频，各自在盖章签名位置盖章签字，两份均邮寄到公证处"],["材料","双方法人身份证及电话、营业执照、两家公司的法定代表人身份证明、《企业微信主体变更认证申请函》（先不盖章不签字）"],["申请函要点","《企业微信主体变更认证申请函》由新旧双方共同签署，核心内容：旧主体委托腾讯将企业微信账号（需写明账号 ID，如 ww89f1ab7879a5140e）整体转移给新主体，确认账号资产、违规处罚记录、转移费用、与第三人权益关系等已达成一致。申请函需双方盖章并经公证后，腾讯才执行主体变更。申请一经确认无法中止、暂停或恢复，费用不退"],["法人身份证明书","需提供新旧两家的《法定代表人身份证明书》，写明法定代表人姓名、性别、身份证号、所任职务、单位名称（加盖公章）、统一社会信用代码、注册地址。一家一份，共两份"],["案例","2026-09 辽宁案卷：企业微信主体变更公证 1 本，双方为榆树市金信诺小额贷款有限公司与深圳市锋幅常科技有限公司，同一法定代表人（陈会明，任总经理）"],["备注","涉及企业主体信息，对外答复仅说明流程与材料，不对外披露客户信息"]],"alias":["公众号迁移","微信公众号迁移","微信迁移","公众号主体迁移","公众号变更","企业微信主体变更","企业微信迁移","企业微信认证"]},{"no":20,"ok":true,"name":"拼多多主体变更申请（一方注销）——签字、印鉴公证","cat":"四、签字、印鉴类","fields":[["办什么公证","签字、印鉴公证（用于拼多多店铺主体变更申请）"],["户籍在哪儿","不限户籍所在地（针对双方法人）"],["在哪儿使用","拼多多平台主体变更审核"],["用途是什么","店铺经营主体变更，原主体注销后由接收方承接"],["注销方材料","原法人身份证件（所有股东均需签字）、电话、注销材料（有的需全部提供）、营业执照图片"],["接收方材料","法人身份证、电话、营业执照、法定代表人身份证明"],["材料","原主体：原法人身份证件（所有股东均需签字）、电话、注销材料、营业执照图片；接收方：法人身份证、电话、营业执照、法定代表人身份证明"],["备注","涉及企业主体信息，对外答复仅说明流程与材料，不对外披露客户信息"]],"alias":["拼多多变更","拼多多主体变更","拼多多注销"]},{"no":21,"ok":true,"name":"身份证、户口本、护照、曾用名、结婚证、死亡证明公证","cat":"五、身份与关系证明类","fields":[["办什么公证","身份类事实公证：身份证、户口本、护照、曾用名、结婚证、死亡证明等"],["户籍在哪儿","仅限户籍所在地办理，跨省办不了"],["在哪儿使用","国内为主；涉外按使用地要求并配海牙认证"],["用途是什么","证明身份信息、婚姻状况、死亡事实等，用于办事、过户、涉外申请"],["要求","跨省办不了，仅限户籍所在地办理"],["材料","身份证正反面、户口本首页+户主页+本人页、护照首页（如需）、结婚证、死亡证明等对应证件（拍照提交）"]],"alias":["户口本公证","身份证公证","护照公证","曾用名公证","结婚证公证","死亡证明公证"]},{"no":22,"ok":true,"name":"亲属关系证明公证","cat":"五、身份与关系证明类","fields":[["办什么公证","亲属关系证明公证（证明申请人与父母或其他亲属的关系）"],["户籍在哪儿","仅限户籍所在地办理，跨省办不了"],["在哪儿使用","国内或境外；涉外按使用地要求并配海牙认证"],["用途是什么","留学、签证、移民、继承等需证明亲属关系的场景"],["要求","基础类型直接按标准报价表报价。国外使用需配海牙认证"],["材料","①申请人与父母身份证正反面、户口本首页户主页本人页；②派出所关系证明或申请人出生医学证明；③父母结婚证信息页+盖章页"],["案例","户籍河北、韩国留学：亲属双号公证+海牙（英）600 元；同批未婚公证 800 元（含 200 元公证处核婚姻的核实费）"]],"alias":["亲属关系","亲属关系公证","关系证明"]},{"no":23,"ok":true,"name":"出生证明公证","cat":"五、身份与关系证明类","fields":[["办什么公证","出生公证 / 出生医学证明公证"],["户籍在哪儿","有地域限制，仅限户籍所在地、出生地或经常居住地办理"],["在哪儿使用","国内为主；涉外（留学、移民、探亲）按使用地要求并配海牙认证"],["用途是什么","证明出生时间、出生地与父母关系，用于出国留学、移民、落户、入学等"],["要求","有地域限制，仅限户籍所在地、出生地或经常居住地办理。必须要有出生医学证明（非婚生亦可）"],["材料","申请人身份证、户口本、出生医学证明；父母身份证、结婚证（如需证明与父母关系）"],["案例","上海公证处出、德国定居用：出生证明 600 元（含认证+英文翻译）"]],"alias":["出生证","出生公证","出生医学证明公证"]},{"no":24,"ok":true,"name":"无犯罪记录证明公证","cat":"五、身份与关系证明类","fields":[["办什么公证","无犯罪记录证明公证"],["户籍在哪儿","仅限户籍所在地办理，跨省办不了"],["在哪儿使用","签证、留学、移民等；哈萨克斯坦、马来西亚等国使用需配海牙认证或双认证"],["用途是什么","证明当事人无犯罪记录，用于签证、留学、移民、就业等"],["要求","基础类型直接按标准报价表报价。哈萨克斯坦使用一般需海牙认证，翻译俄语；无犯罪公证+马来西亚双认证 950 元"],["材料","签证使用全套：①本人身份证正反面、户口本首页+户主页+本人页、护照首页、无犯罪记录证明；②父母身份证正反面、户口本首页+户主页+本人页；③父母结婚证信息页+民政局盖章页；④申请人出生医学证明或派出所关系证明（均拍照）。若只做无犯罪记录证明公证+海牙，只需提供本人材料（第①项），第②~④项是做亲属关系公证用的"],["案例","新疆公证处、汉族、签证使用：无犯罪记录公证+亲属关系公证，双号、哈萨克斯坦使用、翻译俄语，全套 840 元（含双号公证+认证+俄语翻译）"]],"alias":["无犯罪","无犯罪记录","无犯罪证明","无犯罪记录证明"]},{"no":25,"ok":true,"name":"未婚公证","cat":"五、身份与关系证明类","fields":[["办什么公证","未婚声明/未婚证明公证"],["户籍在哪儿","仅限户籍所在地办理，跨省办不了"],["在哪儿使用","国内或境外；涉外按使用地要求并配海牙认证"],["用途是什么","涉外婚姻登记、留学、移民等需证明婚姻状况的场景"],["要求","800 元中含 200 元为公证处核婚姻的核实费"],["材料","申请人身份证正反面、户口本首页户主页本人页"],["案例","上海公证处出、德国定居用：未婚 720 元（含认证+英文翻译）"]],"alias":["未婚公证","未婚声明","单身公证","未婚证明"]},{"no":26,"ok":true,"name":"出入境记录公证","cat":"五、身份与关系证明类","fields":[["办什么公证","出入境记录公证"],["户籍在哪儿","仅限户籍所在地办理，跨省办不了"],["在哪儿使用","境外签证审核（如意大利再入境签证）"],["用途是什么","为了办意大利再入境签证等，证明出入境事实"],["要求","双号；需出入境盖章版，没有盖章版的提供整个查询录屏即可"],["材料","身份证、户口本、出入境记录查询结果（盖章版或查询录屏）"],["价格","对外报价：599 元起（小程序涉外档）。实操：650 元 + 出入境记录英文翻译费；750 元 + 出入境记录意大利语翻译费"]],"alias":["出入境记录","出入境记录公证","出入境证明"]},{"no":27,"ok":true,"name":"驾驶证公证","cat":"五、身份与关系证明类","fields":[["办什么公证","驾驶证公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","境外使用（如西班牙换驾照）需配海牙认证"],["用途是什么","境外换驾照、租车等"],["要求","海牙 + 中英翻译"],["材料","身份证、户口本、驾驶证（正副页）"],["案例","户籍福建、使用地西班牙、用途换驾照：430 元一共（含公证+认证+驾照翻译）"]],"alias":["驾照公证","驾驶证公证","驾照翻译"]},{"no":35,"ok":true,"name":"在职证明公证","cat":"五、身份与关系证明类","fields":[["办什么公证","在职证明公证（证明当事人在某单位在职/任职）"],["户籍在哪儿","目前仅对应省内可以办理，跨省办不了"],["在哪儿使用","境外使用为主（涉外场景，常配合海牙认证及译文）"],["用途是什么","证明在职身份与收入状况，用于签证、居留等涉外事务"],["要求","没有社保流水也可以办理；办理时需提供社保证明或税收证明作为辅助材料。若使用方对公证事项类型没有要求，可改办「复印件与原件相符公证」（第 36 条），该类型不需要提供社保证明、税收证明等对应材料"],["材料","身份证、户口本、单位出具的在职证明原件、社保证明或税收证明（二选一即可）"]],"alias":["在职证明","在职公证","工作证明","任职证明","在职收入"]},{"no":28,"ok":true,"name":"涉外学历学位类公证（学位证、毕业证、成绩单）","cat":"六、学历与成绩类","fields":[["办什么公证","学历学位类公证：学位证、毕业证、成绩单"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","境外学校、雇主、使领馆及移民审核机构；需配海牙认证"],["用途是什么","留学申请、海外求职、移民材料、职业资格认证"],["要求","可以做，不用视频问话，当事人身份核验后签署即可。学历公证需在学信网等官网可查，无法核实的不行"],["材料","身份证、户口本、毕业证/学位证原件、成绩单（需可在学信网等官网核实）"]],"alias":["学历公证","学位公证","毕业证公证","成绩单公证","涉外学历"]},{"no":29,"ok":true,"name":"委托继承","cat":"七、继承与遗嘱类","fields":[["办什么公证","委托继承公证（委托他人代为办理继承事务）"],["户籍在哪儿","参照继承公证口径，需在遗产所在地办理"],["在哪儿使用","遗产所在地不动产登记中心、银行、法院"],["用途是什么","本人不便到场时，委托他人代为办理继承相关手续"],["要求","继承公证本身线上办理不了，可以做委托继承或放弃继承"],["材料","委托人身份证、户口本、与被继承人关系证明、被继承人死亡证明、遗产相关权证、受托人身份证"]],"alias":["委托继承","委托办理继承","继承委托"]},{"no":30,"ok":false,"name":"继承公证","cat":"七、继承与遗嘱类","fields":[["结论","不可办理（线上办理不了）"],["办什么公证","继承权公证（含法定继承、遗嘱继承）"],["户籍在哪儿","按遗产所在地口径，需在遗产所在地办理"],["在哪儿使用","遗产所在地不动产登记中心、银行、证券及法院"],["用途是什么","确认继承人范围与继承份额，用于遗产过户、提取与分割"],["要求","线上办理不了继承公证，可以做放弃继承或委托继承"],["材料",""]],"alias":["继承公证","继承权公证","办理继承"]},{"no":31,"ok":false,"name":"遗嘱公证","cat":"七、继承与遗嘱类","fields":[["结论","不可办理（不能线上办理）"],["办什么公证","遗嘱设立与保全"],["户籍在哪儿","—"],["在哪儿使用","—"],["用途是什么","遗嘱设立与保全"],["要求","涉及人身关系与形式要件，必须线下办理；部分客户可引导其改做赠与公证"],["材料",""]],"alias":["遗嘱公证","立遗嘱","遗嘱"]},{"no":32,"ok":true,"name":"孩子抚养权变更","cat":"八、亲子与监护类","fields":[["办什么公证","变更抚养权协议公证"],["户籍在哪儿","不限户籍所在地"],["在哪儿使用","国内为主；涉外按使用地要求并配海牙认证"],["用途是什么","变更子女抚养权归属，用于户籍迁移、入学、出国随行等"],["要求","可以变更。孩子超过八岁的，需孩子本人签字确认抚养权归属"],["材料","父母双方身份证、户口本、离婚证/离婚判决书及生效证明、原抚养权归属证明、变更抚养权协议文本；孩子超八岁需孩子本人签字"]],"alias":["抚养权变更","孩子抚养权变更","变更抚养权"]},{"no":33,"ok":false,"name":"孩子监护问题（监护法定）","cat":"八、亲子与监护类","fields":[["结论","不可办理（监护权变更、过继给他人、收养等声明均无效，不能公证）"],["办什么公证","监护权变更、过继、收养"],["户籍在哪儿","—"],["在哪儿使用","—"],["用途是什么","监护权变更、过继、收养"],["要求","监护关系由法律直接规定，当事人不能通过声明或约定变更；此类事项一律不予公证"],["材料",""]],"alias":["监护问题","法定监护","孩子监护","监护公证"]},{"no":34,"ok":false,"name":"涉及人身关系的公证","cat":"九、其他","fields":[["结论","不可办理（只能做线下，不能电子签名）"],["办什么公证","涉及人身关系的各类公证事项"],["户籍在哪儿","—"],["在哪儿使用","—"],["用途是什么","涉及人身关系的各类公证事项"],["要求","人身关系类公证必须当事人到场，不适用电子签名线上办理"],["材料",""]],"alias":["人身关系","涉及人身关系"]},{"no":36,"ok":true,"name":"复印件与原件相符公证（文本相符/文件相符）","cat":"九、其他","fields":[["办什么公证","复印件与原件相符公证（文本相符、文件相符）"],["户籍在哪儿","官方清单未设户籍限制要求"],["在哪儿使用","境外使用为主；附使用国语言译文（如图案例为意大利文译本）"],["用途是什么","证明复印件与原件相符、译文与原本相符；适用于使用方对公证事项类型没有特定要求的场景"],["要求","使用方对公证事项没有要求时，可办此类型替代事项类公证（如在职证明公证），不需要提供与文件内容对应的材料（如社保流水、税收证明）"],["材料","申请人身份证明、需公证的文件原件（官方口径：司法部清单「文本相符」）"],["案例","2026-08 山东公证处：《收入证明》复印件与原件相符，所附意大利文译本内容与中文原本相符"]],"alias":["文件相符","文本相符","复印件与原件相符","复印件相符","原件相符"]}],"feeTable":[["业务类型","价格"],["涉外·随行公证","599 元起"],["涉外·成绩单公证","599 元起"],["涉外·结婚证公证","499 元起"],["涉外·离婚证公证","599 元起"],["涉外·护照公证","599 元起"],["涉外·印章公证","599 元起"],["涉外·无犯罪公证","599 元起"],["涉外·出生公证","599 元起"],["涉外·学位公证","599 元起"],["涉外·学历公证","599 元起"],["涉外·亲属关系公证","599 元起"],["涉外·居民身份证公证","599 元起"],["涉外·机动车驾驶证公证","599 元起"],["声明·商标声明公证","899 元起"],["声明·婚姻声明公证","899 元起"],["声明·其他声明公证","699 元起"],["声明·签字印章公证","599 元起"],["声明·放弃继承权声明公证","699 元起"],["委托·银行贷款委托","999 元起"],["委托·其他委托","699 元起"],["委托·外籍委托","1999 元起"],["委托·海外委托","1599 元起"],["委托·公司与股权事务委托","1599 元起"],["委托·房产买卖委托","699 元起"],["企业·股东会议决议","599 元起"],["企业·企业章程","599 元起"],["企业·营业执照公证","599 元起"],["企业·委托书公证","699 元起"],["企业·合同公证","499 元起"],["企业·海牙认证","499 元起"],["企业·纳税状况公证","699 元起"],["财产·房产公证","899 元起"],["财产·遗嘱公证","499 元起"],["财产·继承公证","999 元起"],["财产·赠与公证","899 元起"],["财产·声明书公证","899 元起"],["婚姻家庭·结婚公证","599 元起"],["婚姻家庭·离婚公证","499 元起"],["婚姻家庭·婚姻公证","499 元起"],["婚姻家庭·离婚协议公证","499 元起"],["其他·公众号迁移公证","599 元起"],["其他·拼多多退保证金","699 元起"],["其他·遗嘱保管函公证","600 元起"],["其他·涉外收养公证","899 元起"],["在职证明公证（按委托/声明国内套用）","699 元起"],["复印件与原件相符公证（按其他声明套用）","699 元起"],["出入境记录公证（按涉外公证套用）","599 元起"],["DS-3053 声明公证（按涉外公证套用）","599 元起"],["婚前/婚内财产约定协议（按财产·声明书套用）","899 元起"],["离婚补充协议公证（按婚姻家庭·离婚协议套用）","499 元起"],["企业微信主体变更公证（按其他·公众号迁移套用）","599 元起"],["继承、遗嘱、股权转让、矿产权委托、监护类（线上不受理）","—"]],"limited":[["房屋、车辆买卖委托","外国房产无法核实不能做；军产房、工厂（国有建设用地使用权）无法办理"],["房产委托公证（婚内单独所有）","婚内购买的房产属婚内财产，登记单独所有也不能只由一方办理；需配偶手持声明同意书拍照（东北三省、安徽、江西、福建、重庆、新疆除外）"],["涉外赠与协议/赠与声明","境外使用要求赠与人与受赠人有亲属关联；父母赠与孩子大额资金用于留学不受理"],["资金赠与协议（赠与朋友）","须同时满足：①国内使用 ②提供资金来源合法收入证明"],["婚前财产约定","措辞不宜过分，「XX 出轨如何处置」类条款不予受理"],["出国随行/不随行公证","多个孩子需分开办理，不能办在同一份公证书上"],["放弃继承权声明公证","多人放弃同函：兄弟姐妹一批、长辈一批，不可混放"],["学历学位类公证","需在学信网等官网可查，无法核实的不行"],["在职证明公证","目前仅对应省内可办理；没有社保流水也可办，需提供社保证明或税收证明（二选一）；若使用方对公证事项无要求，可改办复印件与原件相符公证，无需对应材料"]],"blocked":[["编号","事项","情形","说明"],["4","委托涉及矿产类","不能办理","属暂不受理范围"],["16","公司股权协议和分红协议","不能办理","复杂，线上做不了"],["17","转让股权","不能办理","转让股权的都需要实质审查股权真实性；公司有港资的，还需香港持有公证资格的律师对营业执照和公司章程进行审查并出具证明，这种线上不受理"],["30","继承公证","不能办理","线上办理不了继承公证，可以做放弃继承或委托继承"],["31","遗嘱公证","不能办理","不能线上办理；部分客户可引导其改做赠与公证"],["33","孩子监护问题","不能办理","监护权变更、过继给他人、收养等声明均无效，不能公证"],["34","涉及人身关系的公证","不能办理","只能做线下，不能电子签名"]],"platform":[{"title":"平台简介","content":"证小安是一个线上公证办理平台，由平台运营方对接各地公证处，为客户提供在线公证办理服务。\n客户在证小安平台下单申请公证，平台将客户提交的信息与资料转交给对接的公证处，由公证处负责实际审核并办理公证事项、出具公证书。\n证小安平台本身不直接出具公证书，公证办理由对接的公证处完成；平台负责下单受理与信息流转。"},{"title":"办理流程","content":"第一步：客户在证小安平台选择公证事项并在线下单。\n第二步：客户按指引填写并提交身份与业务相关资料。\n第三步：证小安平台将客户信息转交对接的公证处。\n第四步：公证处审核材料、办理公证，并出具公证书。"}],"official":{"城市房屋所有权委托":{"name":"城市房屋所有权委托（自然人申办）","materials":["申请人身份证明","受托人身份证明影印件或复印件","涉及不动产处分的，提交婚姻状况证明","不动产权利证明"]},"一般事务性委托":{"name":"一般事务性委托","materials":["申请人身份证明","受托人身份证明影印件或复印件","与事务性委托相关的证明"]},"建设用地使用权委托":{"name":"建设用地使用权委托（法人、非法人组织申办）","materials":["申请人身份证明","受托人身份证明影印件或复印件","法人、非法人组织章程（协议）；涉及需权力机构决议或有关部门批准的，提交决议或批文","建设用地权利证明"]},"动产物权委托":{"name":"动产物权委托（自然人申办）","materials":["申请人身份证明","受托人身份证明影印件或复印件","涉及动产物权处分的，提交婚姻状况证明","动产物权权利证明"]},"法人动产物权委托":{"name":"动产物权委托（法人、非法人组织申办）","materials":["申请人身份证明","受托人身份证明影印件或复印件","法人、非法人组织章程（协议）；涉及需权力机构决议或有关部门批准的，提交决议或批文","动产物权权利证明"]},"放弃继承权声明":{"name":"放弃继承权声明","materials":["申请人身份证明","被继承人等相关人员死亡证明影印件或复印件","亲属关系证明影印件或复印件","财产权利证明影印件或复印件","有遗嘱的，需提交遗嘱"]},"涉及法律事实的声明":{"name":"涉及法律事实的声明（出生、死亡、婚姻状况等）","materials":["申请人身份证明","与声明的法律事实相关的证明"]},"涉及其他法律行为的声明":{"name":"涉及其他法律行为的声明","materials":["申请人身份证明","与声明的法律行为相关的证明","申请人为法人、非法人组织的，提交章程（协议）；涉及需权力机构决议或有关部门批准的，提交决议或批文"]},"商标转让声明":{"name":"声明 · 商标转让声明","materials":["申请人身份证明","受让人身份证明影印件或复印件","商标权利证明","申请人为法人、非法人组织的，提交章程（协议）；涉及需权力机构决议或有关部门批准的，提交决议或批文"]},"赠与":{"name":"赠与（自然人申办）","materials":["申请人身份证明","受赠人身份证明影印件或复印件","赠与人的婚姻状况证明","涉及具体财产的，提交财产权利证明","赠与人与受赠人系亲属的，提交亲属关系证明"]},"受赠":{"name":"受赠（自然人申办）","materials":["申请人身份证明","涉及具体财产的，提交财产权利证明","经公证的赠与书或其他含有赠与意思表示的文书","赠与人与受赠人系亲属的，提交亲属关系证明"]},"处分财产的遗嘱":{"name":"遗嘱 · 处分财产的遗嘱","materials":["申请人身份证明","受益人身份证明影印件或复印件","遗嘱涉及具体财产的，提交财产权利证明","指定遗嘱执行人的，提交身份证明影印件或复印件"]},"处理事务的遗嘱":{"name":"遗嘱 · 处理事务的遗嘱","materials":["申请人身份证明","指定遗嘱执行人的，提交身份证明影印件或复印件","与处理事务相关的证明"]},"公司章程":{"name":"公司章程","materials":["申请人身份证明","公司章程文本","发起人协议或股东名册","享有表决权的参会人员名册及身份证明","会议通知（或公告）及会议文件","事前经有关部门批准的，提交批文"]},"认领亲子":{"name":"认领亲子","materials":["申请人身份证明","被认领人身份证明","亲子鉴定报告","被认领人已被收养的，提交收养关系解除证明"]},"出生":{"name":"出生（婚生子女）","materials":["申请人身份证明","出生证明","生父母的身份证明、婚姻关系证明"]},"生存":{"name":"生存","materials":["申请人身份证明"]},"死亡":{"name":"死亡","materials":["申请人身份证明","死亡证明","申请人与死者的关系证明"]},"国籍":{"name":"身份 · 国籍","materials":["申请人身份证明","申请人户籍证明"]},"因死亡户籍注销":{"name":"身份 · 因死亡户籍注销","materials":["申请人身份证明","因死亡注销户籍的证明","申请人与死者的关系证明"]},"因迁移户籍注销":{"name":"身份 · 因迁移户籍注销","materials":["申请人身份证明","因迁移注销户籍的证明"]},"未做过户籍登记":{"name":"身份 · 未做过户籍登记","materials":["申请人身份证明","查无户籍档案记载的证明","申请人为未成年人的，提交出生医学证明和父母身份证明"]},"法定监护":{"name":"身份 · 法定监护","materials":["申请人身份证明","被监护人身份证明","申请人与被监护人关系证明","被监护人为成年人的，提交对被监护人民事行为能力确认的证明"]},"指定监护":{"name":"身份 · 指定监护","materials":["申请人身份证明","人民法院的生效裁判文书或居委会/村委会/民政部门指定监护人的文书","被监护人为成年人的，提交对被监护人民事行为能力确认的证明"]},"意定监护":{"name":"身份 · 意定监护","materials":["申请人身份证明","被监护人身份证明","申请人与被监护人形成监护关系的监护协议等证明","对被监护人民事行为能力确认的证明"]},"遗产管理人":{"name":"身份 · 遗产管理人","materials":["申请人身份证明","被继承人死亡证明","申请人取得遗产管理人身份的材料"]},"曾用名":{"name":"曾用名","materials":["申请人身份证明","公安机关出具的更名证明或户籍证明"]},"住所地":{"name":"住所地（居住地）","materials":["申请人身份证明","申请人户籍证明","户籍地与经常居所不一致的：证明住所地提交一年以上居住证明；证明居住地提交居住证明"]},"学历":{"name":"学历","materials":["申请人身份证明","学历证明"]},"学位":{"name":"学位","materials":["申请人身份证明","学位证明"]},"经历":{"name":"经历","materials":["申请人身份证明","经历证明及关联性材料"]},"职务":{"name":"职务","materials":["申请人身份证明","职务证明及关联性材料"]},"专业技术职务":{"name":"专业技术职务","materials":["申请人身份证明","专业技术职务证明"]},"无犯罪记录":{"name":"无（有）犯罪记录 · 无犯罪记录","materials":["申请人身份证明","公安机关出具的无犯罪记录证明"]},"有犯罪记录":{"name":"无（有）犯罪记录 · 有犯罪记录","materials":["申请人身份证明","公安机关出具的有犯罪记录证明或人民法院作出的生效刑事判决书"]},"未婚":{"name":"婚姻状况 · 未婚","materials":["申请人身份证明"]},"离婚未再婚":{"name":"婚姻状况 · 离婚未再婚","materials":["申请人身份证明","离婚证明"]},"丧偶未再婚":{"name":"婚姻状况 · 丧偶未再婚","materials":["申请人身份证明","结婚证明","配偶的死亡证明"]},"已婚":{"name":"婚姻状况 · 已婚（初婚/再婚）","materials":["申请人身份证明","结婚证明","初婚：要求证明婚姻关系终止的，提交死亡证明；再婚：原婚姻关系终止证明"]},"亲属关系":{"name":"（非继承）亲属关系","materials":["申请人身份证明","关系人身份证明影印件或复印件","亲属关系证明"]},"收入状况":{"name":"收入状况","materials":["申请人身份证明","收入证明及关联性材料"]},"纳税状况":{"name":"纳税状况（自然人申办）","materials":["申请人身份证明","纳税证明"]},"证书":{"name":"证书（执照）","materials":["申请人身份证明","申请公证的证书（执照、其他证明）"]},"文本相符":{"name":"文本相符","materials":["申请人身份证明","申请公证的文本原本"]},"票据拒绝":{"name":"票据拒绝","materials":["申请人身份证明","被拒绝承兑（付款）的票据"]},"不可抗力":{"name":"不可抗力（意外事件）","materials":["申请人身份证明","不可抗力（意外事件）证明"]},"法人资格":{"name":"资格 · 法人资格","materials":["申请人身份证明","法定代表人身份证明书"]},"非法人组织资格":{"name":"资格 · 非法人组织资格","materials":["申请人身份证明","负责人身份证明书"]},"保全证据":{"name":"保全证据","materials":["申请人身份证明","申请人与保全事项存在利害关系的证明"]},"查无档案记载":{"name":"查无档案记载","materials":["申请人身份证明","查无档案记载证明"]},"婚前财产约定协议":{"name":"合同（协议）· 婚前财产约定协议","materials":["申请人身份证明","协议涉及具体财产的，提交财产权利证明"]},"夫妻财产约定协议":{"name":"合同（协议）· 夫妻财产约定协议","materials":["申请人身份证明","申请人婚姻状况证明","协议涉及具体财产的，提交财产权利证明"]},"离婚协议":{"name":"合同（协议）· 离婚协议","materials":["申请人身份证明","婚姻状况证明","财产权利证明","涉及子女抚养的，提交子女的身份证明、出生证明"]},"离婚后财产分割":{"name":"合同（协议）· 离婚后财产分割及子女抚养协议","materials":["申请人身份证明","婚姻状况证明","财产权利证明","涉及子女抚养的，提交子女的身份证明、父母与子女的关系证明"]},"变更抚养权协议":{"name":"合同（协议）· 变更抚养权协议","materials":["申请人身份证明","被抚养人身份证明","原抚养权证明"]},"抚养协议":{"name":"合同（协议）· 抚养协议","materials":["申请人身份证明","申请人婚姻状况证明","被抚养人身份证明","申请人之间以及与被抚养人关系证明"]},"监护协议":{"name":"合同（协议）· 监护协议","materials":["申请人身份证明","被监护人身份证明","监护人与被监护人关系证明","监护资格证明","对被监护人民事行为能力确认的证明"]},"房屋买卖合同":{"name":"合同（协议）· 房屋买卖合同","materials":["申请人身份证明","卖方为自然人的，提交婚姻状况证明","申请人为法人/非法人组织的，提交章程（协议）及决议或批文","不动产权利证明"]},"赠与合同":{"name":"合同（协议）· 赠与合同","materials":["申请人身份证明","赠与人为自然人的，提交婚姻状况证明","申请人为法人/非法人组织的，提交章程（协议）及决议或批文","涉及具体财产的，提交财产权利证明","赠与人与受赠人系亲属的，提交亲属关系证明"]},"房屋租赁合同":{"name":"合同（协议）· 房屋租赁合同","materials":["申请人身份证明","不动产权利证明等有权出租房屋的证明","存在共有人的，提交房屋共有人同意出租的书面文件","申请人为法人/非法人组织的，提交章程（协议）及决议或批文"]},"股权转让协议":{"name":"合同（协议）· 股权转让协议","materials":["申请人身份证明","目标公司身份证明","股权证明","公司章程","申请人为法人/非法人组织的，涉及需权力机构决议、有关部门批准或其他股东放弃优先购买权的，提交决议、批文或股东同意书"]},"遗赠扶养协议":{"name":"合同（协议）· 遗赠扶养协议（自然人申办）","materials":["申请人身份证明","申请人婚姻状况证明","协议涉及具体财产的，提交财产权利证明"]},"收养协议":{"name":"合同（协议）· 收养协议","materials":["申请人身份证明","被收养人身份证明","收养人婚姻状况证明","送养人、收养人、被收养人符合收养条件的证明"]},"解除收养协议":{"name":"合同（协议）· 解除收养协议","materials":["申请人身份证明","收养关系证明","被收养人未成年的，提交身份证明"]},"同居关系析产":{"name":"合同（协议）· 同居关系析产及子女抚养协议","materials":["申请人身份证明","婚姻状况证明","财产权利证明","涉及子女抚养的，提交子女的身份证明、父母与子女的关系证明"]},"析产协议":{"name":"合同（协议）· 析产协议","materials":["申请人身份证明","婚姻状况证明","财产权利证明"]},"国有土地使用权转让合同":{"name":"合同（协议）· 国有土地使用权转让合同","materials":["申请人身份证明","转让方为自然人的，提交婚姻状况证明","申请人为法人/非法人组织的，提交章程（协议）及决议或批文","国有土地使用权权属证明"]},"知识产权使用许可":{"name":"合同（协议）· 知识产权使用许可（转让）合同","materials":["申请人身份证明","知识产权权利证明","许可（转让）方为法人/非法人组织的，提交章程（协议）及决议或批文"]},"金融贷款合同":{"name":"合同（协议）· 金融贷款合同","materials":["申请人身份证明","债权人经营金融业务许可证","涉及财产的，提交财产权利证明","债务人、担保人为自然人的，提交婚姻状况证明","债务人、担保人为法人/非法人组织的，提交章程（协议）及决议或批文"]},"融资租赁合同":{"name":"合同（协议）· 融资租赁合同","materials":["申请人身份证明","融资租赁业务许可证","融资租赁的基础合同","财产权利证明","申请人为自然人的，提交婚姻状况证明","承租人、担保人为法人/非法人组织的，提交章程（协议）及决议或批文"]},"拍卖":{"name":"现场监督 · 拍卖","materials":["申请人身份证明","申请人资质证明","竞买人资格证明","拍卖师资格证明","拍卖标的物权利证明及委托拍卖合同","拍卖须知及拍卖规则","需审批或公告的，提交批文或公告","需要对结果一并监督的，提交结果确认文件"]},"招标投标":{"name":"现场监督 · 招标、投标","materials":["申请人身份证明","根据相应阶段提供招标文件、评标报告（含评标委员会成员身份信息）、中标通知书及中标人身份证明","需审批或公告的，提交批文或公告"]}},"quotesLite":[{"prov":"江西","way":"扫码签字","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"安徽","way":"委托书","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"浙江","way":"委托书","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"湖北","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"四川","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"江苏","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"辽宁","way":"扫码签字","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"山东","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"黑龙江","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"重庆","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"广西","way":"扫码签字","tr":"公证处翻译","period":"3-5工","periodAuth":"10-15工"},{"prov":"河南","way":"委托书","tr":"公证处翻译","period":"3-5工","periodAuth":"10-15工"},{"prov":"云南","way":"扫码签字","tr":"公证处翻译","period":"3-5工","periodAuth":"10-15工"},{"prov":"天津","way":"扫码签字","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"广东","way":"扫码签字","tr":"公证处翻译","period":"3-5工","periodAuth":"10-15工"},{"prov":"山西","way":"扫码签字","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"河北","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"吉林","way":"不用配合","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"海南","way":"扫码签字","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"北京","way":"委托书","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"湖南","way":"扫码签字","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"甘肃","way":"扫码签字","tr":"公证处翻译","period":"3-5工","periodAuth":"10-15工"},{"prov":"福建","way":"委托书","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"陕西","way":"委托书","tr":"翻译自带","period":"3-5工","periodAuth":"10-15工"},{"prov":"贵州","way":"委托书","tr":"公证处翻译","period":"3-5工","periodAuth":"10-15工"}],"hague":["阿尔巴尼亚","阿尔及利亚","安道尔","安提瓜和巴布达","阿根廷","亚美尼亚","澳大利亚","奥地利","阿塞拜疆","巴哈马","巴林","孟加拉国","巴巴多斯","白俄罗斯","比利时","伯利兹","玻利维亚","波斯尼亚和黑塞哥维那","博茨瓦纳","巴西","文莱","保加利亚","布隆迪","佛得角","加拿大","智利","中国","哥伦比亚","库克群岛","哥斯达黎加","克罗地亚","塞浦路斯","捷克","丹麦","多米尼克","多米尼加","厄瓜多尔","萨尔瓦多","爱沙尼亚","斯威士兰","斐济","芬兰","法国","格鲁吉亚","德国","希腊","格林纳达","危地马拉","圭亚那","洪都拉斯","匈牙利","冰岛","印度","印度尼西亚","爱尔兰","以色列","意大利","牙买加","日本","哈萨克斯坦","吉尔吉斯斯坦","拉脱维亚","莱索托","利比里亚","列支敦士登","立陶宛","卢森堡","马拉维","马耳他","马绍尔群岛","毛里求斯","墨西哥","摩纳哥","蒙古","黑山","摩洛哥","纳米比亚","荷兰","新西兰","尼加拉瓜","纽埃","北马其顿","挪威","阿曼","巴基斯坦","帕劳","巴拿马","巴拉圭","秘鲁","菲律宾","波兰","葡萄牙","韩国","摩尔多瓦共和国","罗马尼亚","俄罗斯","卢旺达","圣基茨和尼维斯","圣卢西亚","圣文森特和格林纳丁斯","萨摩亚","圣马力诺","圣多美和普林西比","沙特阿拉伯","塞内加尔","塞尔维亚","塞舌尔","新加坡","斯洛伐克","斯洛文尼亚","南非","西班牙","苏里南","瑞典","瑞士","塔吉克斯坦","汤加","特立尼达和多巴哥","突尼斯","土耳其","乌克兰","英国","美国","乌拉圭","乌兹别克斯坦","瓦努阿图","委内瑞拉"],"hagueAlias":{"美利坚合众国":"美国","大不列颠及北爱尔兰联合王国":"英国","俄罗斯联邦":"俄罗斯","多民族玻利维亚国":"玻利维亚","委内瑞拉玻利瓦尔共和国":"委内瑞拉","捷克共和国":"捷克","多米尼加共和国":"多米尼加","文莱达鲁萨兰国":"文莱","大韩民国":"韩国","越南社会主义共和国":"越南","老挝人民民主共和国":"老挝","阿拉伯联合酋长国":"阿联酋","沙特阿拉伯王国":"沙特阿拉伯","南非共和国":"南非","阿拉伯埃及共和国":"埃及","巴基斯坦伊斯兰共和国":"巴基斯坦","孟加拉人民共和国":"孟加拉国","蒙古国":"蒙古","印度尼西亚共和国":"印度尼西亚","菲律宾共和国":"菲律宾","新加坡共和国":"新加坡","泰王国":"泰国"},"spoken":{"意向监护":"意定监护","意向监护公证":"意定监护","意定监护公证":"意定监护","监护公证":"法定监护","监护权公证":"法定监护","转让股权":"股权转让协议","股权转让":"股权转让协议","遗嘱公证":"处理事务的遗嘱","遗嘱":"处理事务的遗嘱","公司股权协议":"股权转让协议"}};
+const FULL = "https://4sirfour.github.io/zhengxiaoan/";
 
-let MODELS=[], CUR_MODEL='', KB={}, INTERNAL=false, BUSY=false;
-const FOUR_KEYS=['办什么公证','户籍在哪儿','在哪儿使用','用途是什么'];
-const FOUR_KW={
-  '办什么公证':['办什么','什么公证','办理','想办','要办','申请','委托','声明','继承','学历','出生','抚养','签字','协议','赠与','公证'],
-  '户籍在哪儿':['户籍','户口','籍贯','老家','四川','北京','上海','广东','浙江','江苏','山东','河南','湖北','湖南','重庆','天津','福建','安徽','江西','辽宁','吉林','黑龙江','山西','陕西','甘肃','云南','贵州','广西','海南','新疆','内蒙','河北','香港','澳门'],
-  '在哪儿使用':['国内','国外','境外','出国','涉外','海牙','留学','移民','签证','美国','加拿大','澳洲','澳大利亚','英国','日本','韩国','新加坡','德国','法国','意大利','荷兰','使用'],
-  '用途是什么':['用途','用来','为了','干什么用','做什么用','目的','用于']
-};
+/* ================= 检索（与后端同源的简化实现） ================= */
+const GENERIC = new Set("公证 办理 申请 需要 什么 材料 如何 怎么 可以 是否 请问 我想 我要 户籍 使用 用途 用于 国内 国外 境外 多少 钱 几天 时间".split(" "));
+const SUFFIX = ["公证","证明","声明","协议","合同","书","文件","事项","服务"];
+const ALIAS_IDX = {};
+KB.kb.forEach(it => (it.alias||[]).forEach(a => ALIAS_IDX[a] = it.no));
 
-function guessFour(t){
-  return FOUR_KEYS.map(k=>({k, ok:FOUR_KW[k].some(w=>t.includes(w))}));
+function tokenize(q){
+  const s = (q||"").replace(/[\s，。？！、,\.!\?·：:；;（）()【】\[\]"'～~—\-]/g,"");
+  const out = new Set();
+  for(let n=2;n<=3;n++)
+    for(let i=0;i+n<=s.length;i++) out.add(s.slice(i,i+n));
+  if(s.length===1) out.add(s);
+  return [...out];
 }
-
-/* ---------- 模型选择器 ---------- */
-async function loadModels(){
-  const d = await api('/api/models');
-  MODELS = d.models||[];
-  CUR_MODEL = localStorage.getItem('zx_model') || d.default || (MODELS[0]&&MODELS[0].id);
-  if(!MODELS.find(m=>m.id===CUR_MODEL)) CUR_MODEL = d.default || MODELS[0].id;
-  renderModelBtn(); renderModelMenu();
+function coreSubject(name){
+  let n = (name||"").replace(/[（(][^）)]*[）)]/g,"").split("·").pop().trim();
+  n = n.replace(/^\d+[\.、]\s*/,"").replace(/^(涉外的?|国内的?)/,"");
+  SUFFIX.forEach(s => n = n.split(s).join(""));
+  return n.trim();
 }
-function curModel(){ return MODELS.find(m=>m.id===CUR_MODEL) || MODELS[0] || {label:'—',ready:false}; }
-function renderModelBtn(){
-  const m = curModel();
-  $('#mName').textContent = m.label;
-  $('#mDot').className = 'dot' + (m.ready ? '' : ' off');
-  $('#modelBtn').title = m.desc || '';
-}
-function renderModelMenu(){
-  const tiers = {smart:'🧠 智能分析', fast:'⚡ 快速应答', off:'📖 不调用模型'};
-  let h = '<div class="mh">选择模型（影响回答深度与速度）</div>';
-  ['smart','fast','off'].forEach(t=>{
-    const list = MODELS.filter(m=>m.tier===t);
-    if(!list.length) return;
-    h += `<div class="mh" style="padding-top:10px">${tiers[t]}</div>`;
-    list.forEach(m=>{
-      let tag = '';
-      if(m.free && m.id!=='kb-only') tag = '<span class="tag free">免费额度</span>';
-      if(!m.ready) tag = '<span class="tag nokey">未配置 Key</span>';
-      h += `<div class="mopt ${m.id===CUR_MODEL?'sel':''}" data-m="${m.id}">
-        <div class="mk">${m.id===CUR_MODEL?'✓':''}</div>
-        <div class="mb"><div class="mt">${esc(m.label)}${tag}</div>
-        <div class="md">${esc(m.desc)}</div></div></div>`;
-    });
-  });
-  h += '<div class="mfoot">未配置密钥的模型会自动降级为知识库检索，不影响使用。</div>';
-  $('#modelMenu').innerHTML = h;
-  $('#modelMenu').querySelectorAll('.mopt').forEach(el=>{
-    el.onclick = ()=>{
-      CUR_MODEL = el.dataset.m;
-      localStorage.setItem('zx_model', CUR_MODEL);
-      renderModelBtn(); renderModelMenu();
-      $('#modelMenu').classList.remove('show');
-    };
-  });
-}
-$('#modelBtn').onclick = e=>{ e.stopPropagation(); $('#modelMenu').classList.toggle('show'); };
-document.addEventListener('click', ()=> $('#modelMenu').classList.remove('show'));
-$('#modelMenu').onclick = e=> e.stopPropagation();
-
-/* ---------- 目录 ---------- */
-let APASS = sessionStorage.getItem('zx_apass') || '';  // 管理员密码（会话内有效）
-async function loadKB(){
-  KB = await api('/api/kb' + (INTERNAL ? `?internal=1&pass=${encodeURIComponent(APASS)}` : ''));
-  if(INTERNAL && KB.admin === false){  // 密码失效，退回当事人视图
-    INTERNAL = false; APASS = ''; sessionStorage.removeItem('zx_apass');
-    $('#btnView').classList.remove('on');
-    $('#btnView').textContent = '👁 当事人视图';
-  }
-  $('#kbStat').textContent = `共 ${KB.stats.total} 条 · ☑${KB.stats.ok} ☐${KB.stats.no}`;
-  renderTOC();
-}
-function renderTOC(){
-  // 目录与条目对所有人可见；仅各省报价表为内部信息
-  const q = $('#q').value.trim().toLowerCase();
-  let h = '';
-  KB.kb.forEach(g=>{
-    const items = g.items.filter(it=>{
-      if(!q) return true;
-      const blob = (g.cat+it.name+(it.fields||[]).map(f=>f[0]+f[1]).join('')).toLowerCase();
-      return blob.includes(q);
-    });
-    if(!items.length) return;
-    const nOk = items.filter(i=>i.ok).length;
-    h += `<details class="grp" open><summary>${esc(g.cat)}
-      <span class="cnt">${items.length} 条 · ☑${nOk} ☐${items.length-nOk}</span></summary><div class="body">`;
-    items.forEach(it=>{
-      h += `<div class="it ${it.ok?'':'no'}" data-no="${it.no}">
-        <div class="r1"><span class="cb ${it.ok?'y':'n'}">${it.ok?'✓':''}</span>
-        <span class="pn">${it.no}.</span><span>${esc(it.name)}</span></div>
-        <div class="pr">${it.price?esc(it.price)+' · ':''}${it.ok?'☑ 可办理':'☐ 不能办理'}</div></div>`;
-    });
-    h += '</div></details>';
-  });
-
-  // 平台与工具
-  h += `<details class="grp" open><summary>📋 平台与收费<small class="cnt"></small></summary><div class="body">
-    <div class="it" data-fee="1"><div class="r1">收费标准总表</div><div class="pr">点击查看</div></div>`;
-  if(INTERNAL){  // 各省报价表为内部信息，仅管理员可见
-    h += `<div class="it" data-price="1"><div class="r1">各省报价表</div><div class="pr">${KB.quotes.length} 个省市</div></div>`;
-  }
-  h += `<div class="it" data-fee="1"><div class="r1">不能办理 / 受限事项</div><div class="pr">${KB.blocked.length-1} 项</div></div>`;
-  if(INTERNAL){
-    h += `<div class="it" data-case="1"><div class="r1">案例与专项报价</div><div class="pr">${(KB.cases||[]).length} 个实操案例</div></div>`;
-  }
-  h += `</div></details>`;
-  h += `<details class="grp"><summary>ℹ️ 平台介绍<small class="cnt"></small></summary><div class="body">
-    ${KB.platform.map(p=>`<div class="it" data-plat="${esc(p.title)}"><div class="r1">${esc(p.title)}</div>
-    <div class="pr">${esc(p.content.slice(0,26))}…</div></div>`).join('')}
-    </div></details>`;
-
-  $('#toc').innerHTML = h || '<div style="padding:20px;color:#6b7280;font-size:13px">没有匹配的条目</div>';
-  bindTocClicks();
-}
-function bindTocClicks(){
-  $('#toc').querySelectorAll('.it').forEach(el=>{
-    el.onclick = ()=>{
-      if(el.dataset.no){ showDetail(findItem(+el.dataset.no)); }
-      else if(el.dataset.fee) showFee('fee');
-      else if(el.dataset.price) showFee('price');
-      else if(el.dataset.case) showCases();
-      else if(el.dataset.plat){ const p=KB.platform.find(x=>x.title===el.dataset.plat); if(p) pushMsg('a', p.content, {title:p.title}); }
-      if(window.innerWidth<=900) $('#side').classList.remove('open');
-    };
-  });
-}
-/* 事项详情：直接查看，不发送提问 */
-let DET_IT = null;
-function showDetail(it){
-  DET_IT = it;
-  $('#detTitle').textContent = `${it.no}. ${it.name}`;
-  const badge = `<span class="cb ${it.ok?'y':'n'}" style="display:inline-block;margin-right:6px">${it.ok?'✓ ☑ 可办理':'☐ 不能办理'}</span>`;
-  let h = `<div style="padding:14px 18px 6px">${badge}
-    <span style="color:#6b7280;font-size:13px">${esc(it.price||'')}</span></div>
-    <div style="padding:4px 18px 10px">`;
-  (it.fields||[]).forEach(f=>{
-    const v = f[1] || '（待补充）';
-    h += `<div class="drow"><div class="dk">${esc(f[0])}</div><div class="dv">${esc(v)}</div></div>`;
-  });
-  h += '</div>';
-  $('#detBody').innerHTML = h;
-  $('#detMask').classList.add('show');
-}
-$('#detAsk').onclick = ()=>{
-  if(!DET_IT) return;
-  $('#detMask').classList.remove('show');
-  ask(`我想办理「${DET_IT.name}」，请说明办理要求、材料清单和价格。`);
-};
-function findItem(no){ for(const g of KB.kb) for(const it of g.items) if(it.no===no) return it; return {name:''}; }
-$('#q').oninput = renderTOC;
-
-/* ---------- 视图切换 ---------- */
-$('#btnView').onclick = ()=>{
-  if(!INTERNAL){  // 当事人 → 管理员：需密码验证
-    $('#pwErr').textContent = ''; $('#pwInput').value = APASS;
-    $('#pwMask').classList.add('show');
-    setTimeout(()=>$('#pwInput').focus(), 50);
-  }else{          // 管理员 → 当事人：直接切换
-    INTERNAL = false;
-    $('#btnView').classList.remove('on');
-    $('#btnView').textContent = '👁 当事人视图';
-    $('#modeHint').textContent = '当事人视图：全部目录可见';
-    loadKB();
-  }
-};
-async function tryAdminLogin(){
-  const p = $('#pwInput').value;
-  if(!p){ $('#pwErr').textContent = '请输入密码'; return; }
-  try{
-    const d = await api('/api/admin/login',{method:'POST',body:JSON.stringify({pass:p})});
-    if(!d.ok){ $('#pwErr').textContent = '密码错误，请重试'; return; }
-    APASS = p; sessionStorage.setItem('zx_apass', p);
-    INTERNAL = true;
-    $('#pwMask').classList.remove('show');
-    $('#btnView').classList.add('on');
-    $('#btnView').textContent = '🔓 管理员视图';
-    $('#modeHint').textContent = '管理员视图：含各省报价与案例';
-    await loadKB();
-  }catch(e){
-    $('#pwErr').textContent = '密码错误，请重试';
-  }
-}
-$('#pwOk').onclick = tryAdminLogin;
-$('#pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') tryAdminLogin(); });
-
-/* ---------- 聊天 ---------- */
-let HIST = [];  // 对话历史 [{role:'user'|'assistant', text}]，随请求发给后端做上下文
-
-function pushMsg(role, text, extra){
-  $('#emptyState')?.remove();
-  const d = document.createElement('div');
-  d.className = 'msg ' + (role==='u'?'u':'a');
-  let inner = `<div class="bub">${esc(text)}</div>`;
-  if(extra){
-    let m = '';
-    if(extra.model) m += `<span class="b">🤖 ${esc(extra.model)}</span>`;
-    if(extra.mode==='kb') m += `<span class="b">📖 知识库检索</span>`;
-    if(extra.mode==='fallback') m += `<span class="b warn">⚠️ 已降级为检索</span>`;
-    if(extra.degraded) m += `<span class="b warn">模型不可用</span>`;
-    if(extra.hits&&extra.hits.length) m += `<span class="b ok">📚 命中 ${extra.hits.length} 条</span>`;
-    if(extra.missing&&extra.missing.length) m += `<span class="b warn">待确认：${esc(extra.missing.join('、'))}</span>`;
-    let src = '';
-    if(extra.hits&&extra.hits.length){
-      src = '<div class="srcs">依据来源：' + extra.hits.map(h=>
-        `<span class="s">· ${esc(h.title)}${h.ok===false?'［不能办理］':''}</span>`).join('') + '</div>';
+function search(q){
+  const toks = tokenize(q);
+  if(!toks.length) return [];
+  const df = t => KB.kb.reduce((c,it)=>c+((it._text||"").includes(t)?1:0),0) || 1;
+  const scored = [];
+  for(const it of KB.kb){
+    it._text = it._text || (it.name + " " + (it.alias||[]).join(" ") + " " +
+      it.fields.map(f=>f[0]+f[1]).join(" ") + " " + it.cat);
+    let sc = 0, hits = 0;
+    for(const t of toks){
+      if(it._text.includes(t)){
+        hits++;
+        sc += (1/(1+Math.log(1+KB.kb.length/df(t)))) * Math.sqrt(t.length);
+      }
     }
-    inner += (m?`<div class="meta">${m}</div>`:'') + src;
+    if(!hits) continue;
+    sc *= 1 + 0.35*hits/toks.length;
+    const aliasHit = (it.alias||[]).find(a => a.length>=2 && q.includes(a));
+    if(aliasHit) sc += 10;
+    if(q.includes(coreSubject(it.name)) && coreSubject(it.name).length>=2) sc += 8;
+    scored.push([sc,it]);
   }
-  d.innerHTML = `<div class="av">${role==='u'?'我':'证'}</div><div style="min-width:0;max-width:100%">${inner}</div>`;
-  $('#msgs').appendChild(d);
-  $('#msgs').scrollTop = 1e9;
-  return d;
+  scored.sort((a,b)=>b[0]-a[0]);
+  return scored.slice(0,3).filter(x=>x[0]>=0.5).map(x=>x[1]);
 }
-function typing(){
-  const d = document.createElement('div');
-  d.className='msg a'; d.id='typing';
-  d.innerHTML = `<div class="av">证</div><div class="bub"><div class="typing"><i></i><i></i><i></i></div></div>`;
-  $('#msgs').appendChild(d); $('#msgs').scrollTop=1e9;
+function isRelevant(q, it){
+  if((it.alias||[]).some(a=>a.length>=2 && q.includes(a))) return true;
+  const c = coreSubject(it.name);
+  if(c.length>=2 && q.includes(c)) return true;
+  // 3 字片段才视为相关，避免「商标转让声明」被「转让股权」这类共享 2 字词的条目截胡
+  for(let i=0;i+3<=c.length;i++) if(q.includes(c.slice(i,i+3))) return true;
+  return false;
 }
 
-async function ask(text){
-  if(BUSY || !text.trim()) return;
-  BUSY = true; $('#send').disabled = true;
-  pushMsg('u', text);
-  const hist = HIST.slice();  // 发送前的历史快照（不含当前这条）
-  HIST.push({role:'user', text});
-  typing();
-  try{
-    const d = await api('/api/ask',{method:'POST',body:JSON.stringify({
-      q:text, model:CUR_MODEL, internalView:INTERNAL, history:hist
-    })});
-    $('#typing')?.remove();
-    HIST.push({role:'assistant', text:d.answer||''});
-    if(HIST.length > 12) HIST = HIST.slice(-12);  // 最多保留最近 6 轮
-    const m = curModel();
-    pushMsg('a', d.answer, {model:m.label, mode:d.mode, degraded:d.degraded,
-      hits:d.hits, missing:d.missing});
-    if(d.four) paintF4(d.four);
-  }catch(e){
-    $('#typing')?.remove();
-    pushMsg('a', '出错了：'+e.message);
-  }finally{
-    BUSY=false; $('#send').disabled=false;
+/* ================= 四要素 ================= */
+const FOUR = {
+  "办什么公证": ["办什么","什么公证","办理什么","想办","要办","办理","申请"],
+  "户籍在哪儿": ["户籍","户口","籍贯","老家"],
+  "在哪儿使用": ["在哪用","哪里用","使用地","拿去","用于哪个","哪个国家","出到","用在","申根","美国","加拿大","澳大利亚","英国","日本","韩国","德国","法国","意大利","西班牙","马来西亚","泰国","新加坡","俄罗斯","新西兰","荷兰"],
+  "用途是什么": ["用途","干什么用","做什么用","为了","用来","目的","卖给","过户给","给子女","给孩子","给父母","转给","担保","申根","签证","认证","落户","上学","入学","留学","移民","继承"]
+};
+const PROVS = KB.quotesLite.map(q=>q.prov).concat(["香港","澳门","台湾"]);
+function extractFour(t){
+  t = t||"";
+  const g = {};
+  for(const k in FOUR) g[k] = FOUR[k].some(w=>t.includes(w));
+  if(!g["办什么公证"]) g["办什么公证"] = ["委托","声明","协议","合同","签字","印鉴","继承","遗嘱","出生","学历","学位","成绩单","毕业证","抚养权","监护","亲属关系","结婚证","离婚","死亡证明","身份证","户口本","护照","曾用名","财产约定","赠与","过户","股权","无犯罪","未婚","出入境","驾照","在职","复印件"].some(w=>t.includes(w));
+  if(!g["户籍在哪儿"]) g["户籍在哪儿"] = PROVS.some(p=>t.includes(p));
+  return g;
+}
+function missingFour(t){
+  const g = extractFour(t);
+  return Object.keys(g).filter(k=>!g[k]);
+}
+
+/* ================= 涉外国家判定：单号/双号 · 是否必须海牙 ================= */
+/* 判定依据：外交部《公约》缔约国名单（127 国），内嵌于 KB.hague */
+const COUNTRY_WORDS = ["申根","美国","加拿大","澳大利亚","澳洲","新西兰","英国","爱尔兰",
+  "日本","韩国","新加坡","马来西亚","泰国","越南","菲律宾","印度尼西亚","印尼","柬埔寨",
+  "老挝","缅甸","印度","巴基斯坦","孟加拉","斯里兰卡","尼泊尔","哈萨克斯坦","乌兹别克斯坦",
+  "蒙古","阿联酋","迪拜","沙特","卡塔尔","科威特","阿曼","巴林","以色列","土耳其","伊朗",
+  "伊拉克","约旦","德国","法国","意大利","西班牙","葡萄牙","荷兰","比利时","卢森堡","瑞士",
+  "奥地利","瑞典","挪威","丹麦","芬兰","冰岛","波兰","捷克","斯洛伐克","匈牙利","罗马尼亚",
+  "保加利亚","希腊","克罗地亚","斯洛文尼亚","塞尔维亚","俄罗斯","乌克兰","白俄罗斯",
+  "立陶宛","拉脱维亚","爱沙尼亚","格鲁吉亚","亚美尼亚","阿塞拜疆","埃及","南非","尼日利亚",
+  "肯尼亚","摩洛哥","阿尔及利亚","突尼斯","坦桑尼亚","加纳","巴西","阿根廷","智利","秘鲁",
+  "哥伦比亚","委内瑞拉","厄瓜多尔","玻利维亚","乌拉圭","巴拉圭","墨西哥","巴拿马",
+  "哥斯达黎加","古巴","牙买加","欧盟"];
+const COUNTRY_ALIAS = {"申根国":"申根","冰島":"冰岛","俄国":"俄罗斯","澳洲":"澳大利亚",
+  "印尼":"印度尼西亚","迪拜":"阿联酋","美利坚合众国":"美国",
+  "大不列颠及北爱尔兰联合王国":"英国","俄罗斯联邦":"俄罗斯","大韩民国":"韩国"};
+function findCountries(t){
+  t = t||"";
+  const found = [];
+  for(const c of COUNTRY_WORDS){
+    const i = t.indexOf(c);
+    if(i>=0) found.push([i, COUNTRY_ALIAS[c]||c]);
   }
+  found.sort((a,b)=>a[0]-b[0]);
+  const out = [];
+  for(const [_i,c] of found) if(!out.includes(c)) out.push(c);
+  return out;
 }
-$('#send').onclick = ()=>{
-  const v=$('#inp').value; $('#inp').value=''; $('#inp').style.height='auto';
-  const imgs = PENDING_IMGS.slice(); PENDING_IMGS=[]; paintImgs();
-  syncF4();
-  if(imgs.length) askWithImages(v, imgs); else ask(v);
-};
-
-/* ---------- 图片上传识别 ---------- */
-let PENDING_IMGS = [];   // dataURL 列表，最多 4 张
-const MAX_IMGS = 4;
-
-function paintImgs(){
-  const bar = $('#imgBar');
-  if(!PENDING_IMGS.length){ bar.style.display='none'; bar.innerHTML=''; return; }
-  bar.style.display='flex';
-  bar.innerHTML = PENDING_IMGS.map((d,i)=>
-    `<div class="it"><img src="${d}"><button class="rm" data-i="${i}" title="移除">×</button></div>`).join('')
-    + `<span class="hint">已选 ${PENDING_IMGS.length}/${MAX_IMGS} 张，发送后自动识别</span>`;
-  bar.querySelectorAll('.rm').forEach(b=> b.onclick = ()=>{ PENDING_IMGS.splice(+b.dataset.i,1); paintImgs(); });
+function isHague(c){
+  if(!c) return false;
+  if(c==="申根"||c==="欧盟") return true;
+  const n = COUNTRY_ALIAS[c]||c;
+  if((KB.hague||[]).includes(n)) return true;
+  for(const m of (KB.hague||[])){
+    if(m.length>=2 && (m.includes(n)||n.includes(m))) return true;
+  }
+  return false;
 }
-// 压缩到长边 1280 的 JPEG，控制 base64 体积（视觉模型上限 & 上传速度）
-function compressImg(file){
-  return new Promise((res)=>{
-    const r = new FileReader();
-    r.onload = ()=>{
-      const img = new Image();
-      img.onload = ()=>{
-        const M = 1280;
-        let {width:w, height:h} = img;
-        if(Math.max(w,h) > M){ const k = M/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
-        const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
-        cv.getContext('2d').drawImage(img,0,0,w,h);
-        res(cv.toDataURL('image/jpeg', .85));
-      };
-      img.onerror = ()=> res(r.result);   // 解码失败就用原图
-      img.src = r.result;
-    };
-    r.readAsDataURL(file);
-  });
-}
-$('#imgBtn').onclick = ()=> $('#imgFile').click();
-$('#imgFile').onchange = async (e)=>{
-  const files = [...(e.target.files||[])].slice(0, MAX_IMGS - PENDING_IMGS.length);
-  for(const f of files){ PENDING_IMGS.push(await compressImg(f)); }
-  e.target.value='';
-  paintImgs();
-};
-$('#inp').addEventListener('paste', async (e)=>{
-  // 支持直接 Ctrl+V 粘贴截图
-  const files = [...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));
-  if(!files.length) return;
-  e.preventDefault();
-  for(const f of files.slice(0, MAX_IMGS - PENDING_IMGS.length)){ PENDING_IMGS.push(await compressImg(f)); }
-  paintImgs();
-});
-
-async function askWithImages(text, imgs){
-  if(BUSY) return;
-  BUSY = true; $('#send').disabled = true;
-  const label = (text.trim() || '图片里的业务能办吗') + (imgs.length ? `（附 ${imgs.length} 张图片）` : '');
-  pushMsg('u', label);
-  const hist = HIST.slice();
-  HIST.push({role:'user', text: label});
-  typing();
-  try{
-    // 第一步：识图
-    const v = await api('/api/vision',{method:'POST',body:JSON.stringify({images:imgs, note:text})});
-    $('#typing')?.remove();
-    if(!v.ok){
-      HIST.push({role:'assistant', text:v.answer||v.error});
-      pushMsg('a', v.answer || ('识图失败：'+(v.error||'未知错误')));
-      return;
+function countryText(countries){
+  if(!countries || !countries.length) return "";
+  const L = ["【涉外国家判定 · 单号/双号与海牙认证】"];
+  for(const c of countries){
+    L.push(`● ${c}：`);
+    L.push("  · 单号/双号：涉外通常建议做【双号】（双号＝中文原件＋译文均公证，"
+      + "境外对译文效力认可度更高）；若使用地只要中文文件，可做单号。以使用地要求为准。");
+    if(isHague(c)){
+      L.push(`  · 是否必须海牙认证：${c} 属《取消外国公文书认证要求的公约》（海牙公约）`
+        + "缔约国，通常办【海牙认证（附加证明书/Apostille）】即可，无需领事认证（双认证）。"
+        + "个别收件机构可能另有要求，办理前请再确认。");
+    }else{
+      L.push(`  · 是否必须海牙认证：${c} 不在外交部公布的《公约》缔约国名单内，`
+        + "通常需办【领事认证（使馆认证，即双认证）】：公证 → 外交部/地方外办认证 → "
+        + `使用国驻华使领馆认证。若该国近期已加入公约，以使用地机构口径为准。`);
     }
-    // 第二步：按识别结果走判定链路
-    typing();
-    const d = await api('/api/ask',{method:'POST',body:JSON.stringify({
-      q:(text.trim() || '图片里的业务能办吗'), vision:v.vision,
-      model:CUR_MODEL, internalView:INTERNAL, history:hist
-    })});
-    $('#typing')?.remove();
-    HIST.push({role:'assistant', text:d.answer||''});
-    if(HIST.length > 12) HIST = HIST.slice(-12);
-    const m = curModel();
-    pushMsg('a', d.answer, {model:m.label, mode:d.mode, degraded:d.degraded,
-      hits:d.hits, missing:d.missing});
-    if(d.four) paintF4(d.four);
-  }catch(e){
-    $('#typing')?.remove();
-    pushMsg('a', '出错了：'+e.message);
-  }finally{
-    BUSY=false; $('#send').disabled=false;
   }
+  L.push("");
+  L.push("（依据：中国领事服务网（外交部）《公约》缔约国名单，共 127 个缔约国；"
+    + "名单为官方口径，个别收件机构可能有额外要求。）");
+  return L.join("\n");
 }
-$('#inp').addEventListener('keydown', e=>{
-  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); $('#send').click(); }
-});
-$('#inp').addEventListener('input', ()=>{
-  const t=$('#inp'); t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,140)+'px';
-  syncF4();
-});
-function paintF4(four){
-  // 用服务器合并历史后的四要素结果渲染指示条（更准确）
-  $('#f4bar').innerHTML = FOUR_KEYS.map(k=>
-    `<span class="f ${four[k]?'on':'miss'}">${four[k]?'✓':'○'} ${k}</span>`).join('');
-  const miss = FOUR_KEYS.filter(k=>!four[k]).length;
-  $('#modeHint').textContent = miss ? `还缺 ${miss} 项要素` : '四要素已齐，可给完整分析';
-}
-function syncF4(){
-  // 实时提示 = 历史已明确的要素 + 当前输入框内容
-  const past = HIST.filter(h=>h.role==='user').map(h=>h.text).join(' ');
-  const g = guessFour(past + ' ' + $('#inp').value);
-  $('#f4bar').innerHTML = g.map(x=>`<span class="f ${x.ok?'on':'miss'}">${x.ok?'✓':'○'} ${x.k}</span>`).join('');
-  const miss = g.filter(x=>!x.ok).length;
-  $('#modeHint').textContent = miss ? `还缺 ${miss} 项要素` : '四要素已齐，可给完整分析';
-}
-document.querySelectorAll('.chip').forEach(c=> c.onclick = ()=>{ $('#inp').value=c.textContent; syncF4(); $('#send').click(); });
 
-/* ---------- 收费 / 报价 ---------- */
-function showFee(kind){
-  if(kind==='price'){
-    if(!KB.quotes || !KB.quotes.length){ return; }  // 非管理员无报价数据
-    $('#feeTitle').textContent='各省涉外报价表（C 端）';
-    let h = `<div class="warnbox">${KB.quoteNotes.map(n=>'· '+esc(n)).join('<br>')}</div>`;
-    h += '<table class="qt"><tr>'+KB.quoteHeaders.map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
-    KB.quotes.forEach(q=>{ h+=`<tr><td>${esc(q.prov)}</td>`
-      +`<td>${q.d} 元</td><td>${q.s} 元</td><td>${q.dh} 元</td><td>${q.sh} 元</td>`
-      +`<td>${esc(q.way)}</td><td>${esc(q.period)}</td><td>${esc(q.tr)}</td><td>${esc(q.periodAuth)}</td></tr>`; });
-    h += '</table>';
-    $('#feeBody').innerHTML = h;
+/* ================= 回答生成（纯规则，绝不编造） ================= */
+const PERIOD_W = ["几天","多久","多长时间","多少天","几个工作日","周期","多久能拿","什么时候能拿"];
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function periodText(){
+  const p = [...new Set(KB.quotesLite.map(q=>q.period))].join(" / ").replace(/工/g," 个工作日");
+  const a = [...new Set(KB.quotesLite.map(q=>q.periodAuth))].join(" / ").replace(/工/g," 个工作日");
+  return `· 办理周期：公证出具 ${p}（知识库覆盖的 25 省口径一致）\n· 若使用地要求海牙/领事认证：公证+认证合计 ${a}`;
+}
+function fieldOf(it, name){
+  const f = (it.fields||[]).find(x=>x[0]===name);
+  return f ? f[1].trim() : "";
+}
+function officialLookup(q){
+  const keys = Object.keys(KB.official).sort((a,b)=>b.length-a.length);
+  for(const k of keys){
+    if(q.includes(k)){
+      const m = KB.official[k].materials || [];
+      return {name: KB.official[k].name || k,
+        text: m.map((x,i)=>`  ${i+1}. ${x}`).join("\n")};
+    }
+  }
+  // 口语词形预替换：问句含口语键（如「意向监护」）时，用规范术语再查一轮
+  const spoken = KB.spoken || {};
+  for(const sp of Object.keys(spoken).sort((a,b)=>b.length-a.length)){
+    if(q.includes(sp)){
+      const formal = spoken[sp];
+      for(const k of keys){
+        if(k===formal || k.includes(formal) || formal.includes(k)){
+          const m = KB.official[k].materials || [];
+          return {name: KB.official[k].name || k, spoken: sp, formal: formal,
+            text: m.map((x,i)=>`  ${i+1}. ${x}`).join("\n")};
+        }
+      }
+    }
+  }
+  return null;
+}
+function answer(q){
+  const parts = [];
+  let hits = search(q).filter(it=>isRelevant(q,it));
+  const miss = missingFour(q);
+  const wantPeriod = PERIOD_W.some(w=>q.includes(w));
+  const countries = findCountries(q);
+  const cText = countryText(countries);
+  // 口语词形检测：问句含口语写法且官方清单有规范事项时，
+  // 先展示规范事项知识点，命中的 KB 条目降级为「相近条目参考」
+  const offPre = officialLookup(q);
+  const spokenMatch = offPre && offPre.spoken && offPre.formal;
+
+  if(spokenMatch){
+    parts.push(`您问的「${esc(offPre.spoken)}」是口语写法，对应官方规范事项 <b>${esc(offPre.formal)}</b>。`);
+    parts.push(`\n■ ${esc(offPre.name)}［来源：司法部官方证明材料清单］\n${esc(offPre.text)}`);
+    if(hits.length){
+      const it0 = hits[0];
+      parts.push(`\n——\n说明：知识库中的「${esc(it0.name)}」条目针对的是<b>其他监护相关事项</b>（监护权变更、过继、收养等，此类声明无效不能公证），与<b>${esc(offPre.formal)}</b>（法律允许的书面协议安排）<b>不是同一事项</b>，该条目的「不能办理」结论不适用于您的问题。`);
+    }
+    if(wantPeriod) parts.push(periodText());
+    if(cText) parts.push("\n"+cText);
+    if(miss.length) parts.push(`\n——\n为给出准确结论，请补充：<b>${miss.join("、")}</b>。`);
+    parts.push(`<span class="sm">价格以办理公证处对「${esc(offPre.formal)}」的报价为准｜如需模型分析与联网核实，请在浏览器打开完整版：${FULL}</span>`);
+    if(q.includes("代收") && !/不能代收/.test(parts.join("")))
+      parts.push(`<div class="hl">⚠️ 口径提示：若委托书涉及授权受托人<b>代收房款</b>——按知识库口径，<b>卖房款项不能代收</b>（条目 1「要求」）。请以办理公证处最终口径为准。</div>`);
+    return parts.join("\n");
+  }
+
+  if(hits.length){
+    const it = hits[0];
+    const ok = it.ok;
+    parts.push(`<b>${esc(it.name)}</b>［${ok?'<span class="ok">☑ 可办理</span>':'<span class="no">☐ 不能办理</span>'}］`);
+    const what = fieldOf(it,"办什么公证"); if(what) parts.push(`· 办什么：${esc(what)}`);
+    const req = fieldOf(it,"要求"); if(req) parts.push(`· 限制/要求：${esc(req)}`);
+    const mat = fieldOf(it,"材料");
+    parts.push(mat ? `· 材料：${esc(mat)}` : "· 材料：知识库暂未收录该事项的材料清单，以办理公证处口径为准");
+    if(wantPeriod) parts.push(periodText());
+    const price = fieldOf(it,"价格");
+    if(price && price!=="—") parts.push(`· 价格：${esc(price)}（最终以平台/公证处确认为准）`);
+    if(cText) parts.push("\n"+cText);
+    if(miss.length) parts.push(`\n——\n为给出准确结论，请补充：<b>${miss.join("、")}</b>。`);
+    parts.push(`<span class="sm">依据：知识库条目 ${it.no}｜微信精简版不含 AI 分析，如需模型分析、联网核实、图片识别，请在浏览器打开完整版：${FULL}</span>`);
   } else {
-    $('#feeTitle').textContent='收费标准与受理范围';
-    let h = '<h4 style="margin:0 0 10px;font-size:13.5px">一、收费标准总表</h4>';
-    h += '<table class="qt"><tr>'+KB.feeTable[0].map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
-    KB.feeTable.slice(1).forEach(r=>{ h+=`<tr><td>${esc(r[0])}</td><td>${esc(r[1]||'—')}</td></tr>`; });
-    h += '</table>';
-    h += '<h4 style="margin:20px 0 10px;font-size:13.5px">二、不可办理 / 受限事项</h4>';
-    h += '<table class="qt"><tr>'+KB.blocked[0].map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>';
-    KB.blocked.slice(1).forEach(r=>{ h+=`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>
-      <td>${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`; });
-    h += '</table>';
-    $('#feeBody').innerHTML = h;
+    const off = officialLookup(q);
+    if(off){
+      parts.push(`当前知识库暂未收录该事项，以下为<b>司法部官方证明材料清单 · ${esc(off.name)}</b>：\n${esc(off.text)}`);
+      if(wantPeriod) parts.push(periodText());
+      if(cText) parts.push("\n"+cText);
+      if(miss.length) parts.push(`\n——\n请补充：<b>${miss.join("、")}</b>。`);
+      parts.push(`<span class="sm">来源：司法部官方清单｜完整版可在浏览器打开：${FULL}</span>`);
+    } else if(cText){
+      // 涉外场景：即便未匹配到条目，也必须给出国家判定（用户明确要求）
+      parts.push("当前知识库暂未收录该事项的具体条目，以下为涉外使用地的判定结论：");
+      parts.push("\n"+cText);
+      if(wantPeriod) parts.push(periodText());
+      if(miss.length) parts.push(`\n——\n请补充：<b>${miss.join("、")}</b>，以便匹配到具体公证事项。`);
+      parts.push(`<span class="sm">如需模型分析与联网核实，请在浏览器打开完整版：${FULL}</span>`);
+    } else {
+      parts.push("未能匹配到具体公证事项。请描述得更具体些，例如：\n· 「委托买房需要什么材料」\n· 「结婚证公证要几天」\n· 「放弃继承权声明怎么办」\n或点击下方快捷问题。");
+    }
   }
-  $('#feeMask').classList.add('show');
+  // 红线口径：代收房款
+  if(q.includes("代收") && !/不能代收/.test(parts.join("")))
+    parts.push(`<div class="hl">⚠️ 口径提示：若委托书涉及授权受托人<b>代收房款</b>——按知识库口径，<b>卖房款项不能代收</b>（条目 1「要求」）。请以办理公证处最终口径为准。</div>`);
+  return parts.join("\n");
 }
 
-/* 案例与专项报价清单 */
-function showCases(){
-  $('#feeTitle').textContent = '案例与专项报价';
-  let h = '<div class="warnbox">以下为业务实操案例与专项报价，供答复与报价参考；最终以公证处确认为准。</div>';
-  (KB.cases||[]).forEach(c=>{
-    h += `<div style="padding:12px 0;border-bottom:1px dashed #e5e7eb">
-      <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:6px">${esc(c.scene)}</div>
-      <div style="font-size:13px;color:#374151;line-height:1.75">${esc(c.detail)}</div>
-      <div style="font-size:13px;color:#b45309;margin-top:6px"><b>价格：</b>${esc(c.price)}</div>
-    </div>`;
-  });
-  $('#feeBody').innerHTML = h;
-  $('#feeMask').classList.add('show');
+/* ================= UI ================= */
+const $ = s=>document.querySelector(s);
+function push(role, html){
+  const d = document.createElement("div");
+  d.className = "msg "+role;
+  d.innerHTML = `<div class="av">${role==="a"?"证":"我"}</div><div class="bub">${html}</div>`;
+  $("#msgs").appendChild(d);
+  window.scrollTo(0, document.body.scrollHeight);
 }
-async function openCfg(){
-  const c = await api('/api/config');
-  const opts = MODELS.map(m=>`<option value="${m.id}" ${m.id===CUR_MODEL?'selected':''}>${esc(m.label)} — ${esc(m.desc)}</option>`).join('');
-  $('#setModel').innerHTML = opts;
-  $('#setK').value = c.topK||4;
-  $('#setTemp').value = c.temperature??0.2;
-  const provNames = {deepseek:'DeepSeek 深度求索', doubao:'豆包 / 火山方舟', glm:'智谱 GLM', qwen:'通义千问'};
-  let h = '<div style="font-size:12.5px;font-weight:600;margin:6px 0 10px">API Key（按需填写，留空则跳过）</div>';
-  for(const [prov, info] of Object.entries(c.providers)){
-    h += `<div class="prow"><div class="pn2"><b>${esc(provNames[prov]||prov)}</b>
-      <span class="tag ${info.set?'ready':'nokey'}">${info.set?'已配置 '+info.mask:'未配置'}</span></div>
-      <input data-prov="${prov}" placeholder="粘贴 ${esc(prov)} API Key，留空不改动">
-      </div>`;
-  }
-  $('#provRows').innerHTML = h;
-  $('#cfgOk').textContent='';
-  $('#cfgMask').classList.add('show');
-}
-$('#btnCfg').onclick = openCfg;
-$('#saveCfg').onclick = async ()=>{
-  const keys = {};
-  $('#provRows').querySelectorAll('input[data-prov]').forEach(i=>{ if(i.value.trim()) keys[i.dataset.prov]=i.value.trim(); });
-  const body = {keys, defaultModel:$('#setModel').value, topK:+$('#setK').value, temperature:+$('#setTemp').value};
-  if($('#setPass').value.trim()) body.adminPass = $('#setPass').value.trim();
-  await api('/api/config',{method:'POST',body:JSON.stringify(body)});
-  $('#setPass').value = '';
-  CUR_MODEL = body.defaultModel; localStorage.setItem('zx_model',CUR_MODEL);
-  await loadModels();
-  $('#cfgOk').textContent = '✅ 已保存，可立即使用';
-  setTimeout(()=>$('#cfgMask').classList.remove('show'), 700);
-};
-document.querySelectorAll('[data-close]').forEach(b=> b.onclick = ()=> $('#'+b.dataset.close).classList.remove('show'));
-document.querySelectorAll('.mask').forEach(m=> m.onclick = e=>{ if(e.target===m) m.classList.remove('show'); });
+const CHIPS = ["结婚证公证要几天","委托买房需要什么材料","放弃继承权声明公证怎么办","涉外公证大概多少钱","无犯罪记录公证怎么办","亲属关系公证需要什么"];
+$("#chips").innerHTML = CHIPS.map(c=>`<button>${c}</button>`).join("");
+$("#chips").onclick = e=>{ if(e.target.tagName==="BUTTON"){ $("#inp").value = e.target.textContent; send(); } };
 
-/* ---------- init ---------- */
-$('#tgSide').onclick = ()=> $('#side').classList.toggle('open');
-(async()=>{
-  try{
-    await loadModels();
-    await loadKB();
-    syncF4();
-  }catch(e){
-    $('#toc').innerHTML = '<div style="padding:16px;color:#dc2626;font-size:13px">加载失败：'+esc(e.message)+'</div>';
-  }
-})();
+let BUSY = false;
+function send(){
+  if(BUSY) return;
+  const v = $("#inp").value.trim();
+  if(!v) return;
+  BUSY = true; $("#send").disabled = true;
+  $("#inp").value = ""; $("#inp").style.height = "auto";
+  push("u", esc(v));
+  setTimeout(()=>{
+    push("a", answer(v));
+    BUSY = false; $("#send").disabled = false;
+  }, 180);
+}
+$("#send").onclick = send;
+$("#inp").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); }});
+$("#inp").addEventListener("input", function(){ this.style.height="auto"; this.style.height=Math.min(this.scrollHeight,110)+"px"; });
+
+push("a", `您好，我是证小安公证助手（<b>微信精简版</b>）。
+· 直接提问即可，例如「委托买房需要什么材料」「结婚证公证要几天」
+· 覆盖 ${KB.kb.length} 项公证事项、司法部官方材料清单 ${Object.keys(KB.official).length} 项、各省办理周期
+<div class="hl">当前处于微信内置浏览器。如需 <b>AI 模型分析、联网核实、上传图片识别</b> 完整能力，请复制链接到浏览器打开完整版：\n${FULL}</div>`);
 </script>
 </body>
 </html>

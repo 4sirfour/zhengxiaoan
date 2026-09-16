@@ -1,3 +1,5 @@
 __pycache__/
 config.json
 *.pyc
+desktop_v1_backup.html.bak
+.DS_Store

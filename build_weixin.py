@@ -18,7 +18,9 @@ import kb_data as K
 import kb_official as O
 import hague_data as HG
 
-API = "https://a4d528d066378aabd.app.workbuddy.host"
+# 完整版后端地址（需服务器在线时可用）；weixin.html 为纯静态，
+# GitHub Pages 永久托管地址：https://4sirfour.github.io/zhengxiaoan/
+API = "https://4sirfour.github.io/zhengxiaoan/"
 
 DATA = {
     "kb": [{"no": it["no"], "ok": it["ok"], "name": it["name"], "cat": it["cat"],
