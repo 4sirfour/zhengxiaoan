@@ -67,6 +67,28 @@ chk('官方清单兜底', o.includes('司法部官方'), o);
 o = ask('今天天气怎么样');
 chk('无关问题给引导不硬凑', o.includes('未能匹配') || o.includes('快捷问题'), o);
 
+// ---- 涉外国家判定（单号/双号 · 是否必须海牙）----
+o = ask('结婚证公证，去美国留学用');
+chk('美国：识别为涉外', o.includes('涉外国家判定'), o);
+chk('美国：提到单号/双号', o.includes('单号') && o.includes('双号'), o);
+chk('美国：判为海牙缔约国', o.includes('海牙') && o.includes('Apostille'), o);
+
+o = ask('无犯罪记录公证，马来西亚签证用');
+chk('马来西亚：判为需领事认证', o.includes('领事认证') || o.includes('双认证'), o);
+chk('马来西亚：提示不在名单内', o.includes('不在') && o.includes('名单'), o);
+
+o = ask('亲属关系公证，韩国留学用');
+chk('韩国：判为海牙缔约国', o.includes('海牙') && o.includes('缔约国'), o);
+
+o = ask('出生公证，越南使用');
+chk('越南：判为需领事认证', o.includes('领事认证') || o.includes('双认证'), o);
+
+o = ask('我要办宠物血统证明公证，去德国用');
+chk('未收录事项也给出国家判定', o.includes('涉外国家判定') || o.includes('德国'), o);
+
+o = ask('国内房管局过户用，要什么材料');
+chk('纯国内不触发国家判定', !o.includes('涉外国家判定'), o);
+
 // 欢迎消息存在
 chk('欢迎消息渲染', ($('#msgs').children||[]).length > 8, '');
 

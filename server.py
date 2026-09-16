@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 import kb_data as K
 import kb_official as O
+import hague_data as HG
 
 # ==================== 模型注册表 ====================
 # 每组含：id / 名称 / 供应商 / 模型名 / 默认端点 / 是否免费 / 说明
@@ -227,6 +228,62 @@ def period_note():
     if not lines:
         return ""
     return "【办理周期 · 来源：知识库各省报价表】\n- " + "\n- ".join(lines)
+
+
+# ==================== 涉外国家判定（单号/双号 · 是否必须海牙） ====================
+# 用户问「去某国的公证」时，需回答两件事：
+#   ① 该国通常做单号还是双号；② 是否必须办海牙认证（Apostille）。
+# 知识库未收录「国家→单双号/海牙」对照表（用户已确认走联网检索判断），
+# 因此这里负责：识别国家 → 生成判定检索式 → 交给联网检索 → 组装带来源与不确定性的结论。
+COUNTRY_EXTRA = [
+    "申根", "申根国", "欧盟", "美国", "加拿大", "澳大利亚", "澳洲", "新西兰", "英国",
+    "爱尔兰", "日本", "韩国", "朝鲜", "新加坡", "马来西亚", "泰国", "越南", "菲律宾",
+    "印度尼西亚", "印尼", "柬埔寨", "老挝", "缅甸", "文莱", "印度", "巴基斯坦",
+    "孟加拉", "斯里兰卡", "尼泊尔", "哈萨克斯坦", "乌兹别克斯坦", "吉尔吉斯斯坦",
+    "塔吉克斯坦", "土库曼斯坦", "蒙古", "阿联酋", "迪拜", "沙特", "卡塔尔", "科威特",
+    "阿曼", "巴林", "以色列", "土耳其", "伊朗", "伊拉克", "约旦", "黎巴嫩", "叙利亚",
+    "德国", "法国", "意大利", "西班牙", "葡萄牙", "荷兰", "比利时", "卢森堡", "瑞士",
+    "奥地利", "瑞典", "挪威", "丹麦", "芬兰", "冰島", "冰岛", "波兰", "捷克", "斯洛伐克",
+    "匈牙利", "罗马尼亚", "保加利亚", "希腊", "克罗地亚", "斯洛文尼亚", "塞尔维亚",
+    "俄罗斯", "俄国", "乌克兰", "白俄罗斯", "立陶宛", "拉脱维亚", "爱沙尼亚", "格鲁吉亚",
+    "亚美尼亚", "阿塞拜疆", "埃及", "南非", "尼日利亚", "肯尼亚", "埃塞俄比亚",
+    "摩洛哥", "阿尔及利亚", "突尼斯", "利比亚", "坦桑尼亚", "乌干达", "加纳",
+    "巴西", "阿根廷", "智利", "秘鲁", "哥伦比亚", "委内瑞拉", "厄瓜多尔", "玻利维亚",
+    "乌拉圭", "巴拉圭", "墨西哥", "巴拿马", "哥斯达黎加", "古巴", "牙买加",
+]
+
+# 判定「是否属海牙公约适用范围」的权威名单见 hague_data（外交部《公约》缔约国名单）。
+# 这里的 COUNTRY_EXTRA 仅负责「从提问里识别出国家名」。
+
+
+def find_countries(text):
+    """从提问中识别使用地国家（含「申根」这类区域）。按出现位置去重排序。"""
+    t = text or ""
+    found = []
+    for c in COUNTRY_EXTRA:
+        i = t.find(c)
+        if i >= 0 and c not in found:
+            found.append((i, c))
+    found.sort()
+    out = []
+    for _i, c in found:
+        # 「申根国」「冰岛 / 冰島」等归一化，避免重复计数
+        n = {"申根国": "申根", "冰島": "冰岛", "俄国": "俄罗斯", "澳洲": "澳大利亚",
+             "印尼": "印度尼西亚", "迪拜": "阿联酋"}.get(c, c)
+        if n not in out:
+            out.append(n)
+    return out
+
+
+def is_overseas_q(text, countries=()):
+    """判断是否涉外问题：显式提到国外/涉外，或识别到具体国家。"""
+    t = text or ""
+    if countries:
+        return True
+    return any(w in t for w in ["国外", "境外", "外国", "出国", "涉外", "海牙",
+                                "领事认证", "使馆认证", "双认证", "单号", "双号",
+                                "签证", "留学", "移民", "出国游", "定居"])
+
 
 
 def _is_platform_doc(d):
@@ -617,12 +674,32 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
 - 命中 ☐ 事项：明确告知不能办理及原因，并指出替代方案（如继承公证线上办不了，可做放弃继承或委托继承）
 - 禁止把 ☐ 不能办理的事项说成可以办理
 
+【办理周期口径 · 严禁编造】
+- 上下文给出「办理周期 · 来源：知识库各省报价表」时，**只能**引用该数据
+  （公证出具 3-5 个工作日；公证+认证 10-15 个工作日）。
+- 未给出该数据时，不得说出任何具体周期数字（如「5-7 个工作日」），
+  只能说明「以公证处实际受理进度为准」。
+- 严禁把行业常见值当成我司口径。
+
 【依据来源优先级】
 1. 优先用「知识库检索到的相关条目」作答，标注条目编号。
 2. 「办理周期 · 来源：知识库各省报价表」属于知识库内容，问周期时直接引用。
 3. 知识库未收录该事项时，用「司法部官方证明材料清单」作答，标注来源为司法部官方清单；这是权威口径。
 4. 官方清单也没有时，用「网络检索结果」作答，并明确标注来自网络检索、仅供参考、须以使用地公证处口径为准。
 5. 以上都没有时，才说明「当前知识库未提供」，并建议补充文档或联系负责人确认。
+
+【涉外公证 · 国家判定（必须回答）】
+当事人的公证用于境外、且提到了具体国家/地区（如「美国」「韩国」「申根」「马来西亚」）时，
+除常规分析外，**必须正面回答以下两件事，缺一不可**：
+1. **单号还是双号**：说明该国通常建议做单号还是双号公证，并解释区别
+   ——单号＝仅公证中文原件；双号＝中文原件＋译文均做公证（境外认可度更高，涉外一般建议双号）。
+2. **是否必须海牙认证**：说明该国是否属《取消外国公文书认证要求的公约》（海牙公约）适用范围：
+   - 属海牙公约国 → 通常办海牙认证（Apostille）即可，无需领事认证；
+   - 非海牙公约国 → 通常需领事认证（使馆认证，即「双认证」）。
+3. 知识库**没有「国家→单双号/海牙」对照表**。若上下文给出了「涉外国家判定」段与
+   相关「网络检索结果」，按其作答；检索未果时，如实说明**未能确认**，
+   给出较可能的判断方向，并提示**以使用地收件机构及公证处最终口径为准**。
+4. 严禁因为知识库没有收录就跳过这两点不答，也不得编造确定性的结论。
 
 【知识库内容 vs 补充内容 · 必须区分标注】
 - 命中知识库时，知识库已有内容作为主答案，标注条目编号。
@@ -631,6 +708,9 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
 - 引用补充内容时，必须单独起一段，以「（以下为非现有知识库内容，仅做参考）」
   开头，明确说明知识库未收录、内容来自网络检索、须以使用地公证处口径为准。
 - 严禁把补充内容与知识库内容混在一起不加区分，也不得让补充内容看起来像知识库结论。
+- 【严禁虚构来源】上下文中**没有**「网络检索结果」块时，绝不可在回答里写
+  「根据网络检索」「据检索结果」「官方清单显示」等字样——本次并未取得这些来源。
+  此时只能如实说明「该项暂未收录」，可用一般常识谨慎解释，不得声称有来源。
 
 【严禁跨条目挪用材料】
 - 材料清单只能取自：①当事人所问事项对应的知识库条目；②司法部官方清单中同一事项；③网络检索结果中同一事项。
@@ -747,6 +827,78 @@ def gap_web_search(q, gaps, topics=(), user_q=""):
         if ok:
             return txt, True
     return "", False
+
+
+# ==================== 涉外国家判定：单号/双号 · 是否必须海牙 ====================
+def country_rule_search(country, item="", timeout=9):
+    """取某国涉外公证的「单双号 / 海牙认证」要求依据。
+
+    判定主干为外交部《公约》缔约国名单（权威，见 hague_data），
+    本函数只负责补充联网佐证。注意：必应对「国家名 + 公证」类长查询
+    分词效果差（常返回国别百科），因此检索式刻意避开长组合，
+    并用机制类查询（Apostille / 附加证明书）提高命中质量。
+    返回 (检索文本, 是否成功)。
+    """
+    if not country:
+        return "", False
+    is_member, norm = HG.is_hague_member(country)
+    queries = []
+    if is_member:
+        queries.append((f"附加证明书 Apostille 办理流程 公证书", ("公证", "证明书")))
+        queries.append((f"{norm} 海牙认证 公证书 使用", ("公证",)))
+    else:
+        queries.append((f"{norm} 领事认证 公证书 办理", ("公证", "认证")))
+        queries.append((f"{norm} 公证 双认证 使馆认证", ("公证",)))
+    for qs, must in queries:
+        txt, ok = web_search(qs, limit=4, require_notary=True, must_contain=must,
+                             timeout=timeout)
+        if ok:
+            return txt, True
+    return "", False
+
+
+def country_ruling_note(countries, item="", user_q="", web_txt="", web_ok=False):
+    """组装涉外国家的「单号/双号 · 是否必须海牙」判定结论段。
+
+    是否属海牙公约适用范围：以中国领事服务网（外交部）《公约》缔约国名单
+    为权威依据（hague_data），联网检索作为补充佐证。
+    """
+    if not countries:
+        return ""
+    lines = ["【涉外国家判定 · 单号/双号与海牙认证】"]
+    for c in countries:
+        is_member, norm = HG.is_hague_member(c)
+        lines.append(f"● {c}：")
+        # ① 单号 / 双号
+        lines.append("  - 单号 / 双号：涉外场景**通常建议做双号**"
+                     "（双号＝中文原件＋译文均做公证，境外机构对译文效力认可度更高）；"
+                     "若使用地机构明确只要求中文文件，可做单号。最终以使用地要求为准。")
+        # ② 是否必须海牙（依据官方缔约国名单）
+        if is_member:
+            lines.append(f"  - 是否必须海牙认证：{c} 属《取消外国公文书认证要求的公约》"
+                         "（海牙公约）缔约国，**通常办海牙认证（附加证明书 / Apostille）即可**，"
+                         "无需再办领事认证（双认证）。"
+                         "但仍需确认具体收件机构是否另有要求（少数机构会额外要求翻译件公证）。")
+        else:
+            lines.append(f"  - 是否必须海牙认证：{c} **不在**外交部公布的《公约》缔约国名单内，"
+                         "通常**需要办领事认证（使馆认证，即「双认证」）**，"
+                         "即「公证 → 外交部/地方外办认证 → 使用国驻华使领馆认证」。"
+                         "若该国近期已加入公约或收件机构另有规定，请以使用地机构口径为准。")
+    lines.append("")
+    lines.append(f"（判定依据：{HG.hague_source_note()}。"
+                 "缔约国名单为外交部官方口径；个别收件机构可能有额外要求，"
+                 "办理前请与使用地机构或办理公证处最终确认。）")
+    if web_ok and web_txt:
+        lines.append("")
+        lines.append("（以下为联网检索到的相关信息，属非现有知识库内容，仅供参考）")
+        lines.append(web_txt)
+    # 价格：知识库有单双号与「+海牙」分档 → 提示可据此报价
+    if K.QUOTES:
+        lines.append("")
+        lines.append("（价格提示：知识库各省报价表已按「单号公证 / 双号公证 / "
+                     "单号公证+海牙 / 双号公证+海牙」四档分列，可结合户籍所在省报价。）")
+    return "\n".join(lines)
+
 
 
 # ==================== 网络检索兜底 ====================
@@ -1158,16 +1310,59 @@ class H(BaseHTTPRequestHandler):
                     g_txt, g_ok = gap_web_search(q, gaps, topics, search_q)
                     if g_ok:
                         web_txt, web_ok = g_txt, g_ok
+
+            # ---- 涉外国家判定：单号/双号 · 是否必须海牙 ----
+            # 用户要求：涉外且提供了国家名称时，须回答该国做单号还是双号、
+            # 是否必须海牙认证；知识库若无收录则联网搜索作答（知识库暂无该对照表）。
+            q_all = " ".join(hist_user_texts[-2:] + [q, vision_ctx])
+            countries = find_countries(q_all)
+            overseas = is_overseas_q(q_all, countries)
+            country_note = ""
+            if countries and overseas:
+                # 事项主体（用于把检索式聚焦到具体公证类型）
+                _subj = ""
+                for h in (hits or []):
+                    nm = (h.get("title") or "").split("·")[-1]
+                    nm = re.sub(r"^\d+\s*[\.、]\s*", "", nm).strip()
+                    if nm and "其他" not in nm and "一般" not in nm:
+                        _subj = nm
+                        break
+                c_txt, c_ok = country_rule_search(countries[0], item=_subj)
+                country_note = country_ruling_note(countries, item=_subj, user_q=q,
+                                                   web_txt=c_txt, web_ok=c_ok)
+                # 联网结果并入 web 块，保证「非知识库内容」标注链路一致
+                if c_ok:
+                    web_txt = (web_txt + "\n\n" + c_txt) if web_ok else c_txt
+                    web_ok = True
+                    if not gaps:
+                        gaps.append(("topic", "涉外国家要求",
+                                     hits[0] if hits else None))
             # 问「要几天/多久」→ 注入各省报价表中的办理周期（知识库内容）；
-            # 识图场景一律注入，避免模型就周期自行编造常见值
-            pn = period_note() if (_is_period_q(q) or vision_ctx) else ""
+            # 识图场景一律注入，避免模型就周期自行编造常见值。
+            # 涉外/未命中知识库场景也注入：周期是跨事项通用的知识库数据，
+            # 模型没有它就容易编出「5-7 个工作日」这类不存在的值。
+            _need_period = (_is_period_q(q) or vision_ctx or countries
+                            or not kb_ok)
+            pn = period_note() if _need_period else ""
             gap_labels = "、".join(sorted({t for _k, t, _h in gaps})) if gaps else ""
 
             # ---- 仅知识库检索模式 ----
             m = next((x for x in MODELS if x["id"] == model), None)
             if m and m["provider"] == "none":
                 if not hits:
-                    if off_ok or web_ok:
+                    if country_note:
+                        # 涉外国家判定优先展示（用户明确要求的回答项）
+                        parts = ["【仅知识库检索 · 未启用模型分析】\n", country_note + "\n"]
+                        if off_ok or web_ok:
+                            parts.append("以下是权威/网络检索到的相关信息：\n")
+                            if off_ok: parts.append(off_txt + "\n")
+                            if web_ok and web_txt and web_txt not in country_note:
+                                parts.append(web_txt + "\n")
+                        parts.append("如需完整分析，请右上角切换到模型分析；"
+                                     "或从下方目录指出想办的事项。\n\n"
+                                     "【知识库全部事项目录】\n" + kb_catalog())
+                        ans = "\n".join(parts)
+                    elif off_ok or web_ok:
                         parts = ["【仅知识库检索 · 未启用模型分析】\n",
                                  "当前知识库未收录该事项，以下是权威/网络检索到的相关信息：\n"]
                         if off_ok: parts.append(off_txt + "\n")
@@ -1201,6 +1396,9 @@ class H(BaseHTTPRequestHandler):
                     lines.append(f"■ {h['title']}［{tag}］\n{h['content']}\n")
                 if pn:
                     lines.append(pn + "\n")
+                if country_note:
+                    # 涉外国家判定（单号/双号 · 是否必须海牙）
+                    lines.append(country_note + "\n")
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) +
                                  "」，补齐后可给出更精准的判断（右上角切换到模型分析可获得完整解读）。")
@@ -1216,7 +1414,7 @@ class H(BaseHTTPRequestHandler):
                                         "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                         "model": model, "mode": "kb",
                                         "official": off_ok, "web": web_ok,
-                                        "vision": vision_ctx})
+                                        "vision": vision_ctx, "countries": countries})
 
             # ---- 模型分析模式 ----
             have = [k for k, v in four.items() if v]
@@ -1226,10 +1424,27 @@ class H(BaseHTTPRequestHandler):
             if web_ok:
                 blocks.append(web_txt)
             if not kb_ok and not blocks:
-                blocks.append("（知识库无对应条目，官方底库与网络检索也未取得有效结果）")
+                blocks.append("（知识库无对应条目，官方底库与网络检索也未取得有效结果。"
+                              "⚠️ 严禁称「根据网络检索」「据检索结果」——本次并未取得任何检索结果；"
+                              "只能说明该事项暂未收录，可用一般常识谨慎说明，"
+                              "但不得给出具体价格与办理周期的承诺值。）")
             web_block = ("\n\n" + "\n\n".join(blocks)) if blocks else ""
             # 问「要几天/多久」时把各省报价表的周期数据注入上下文（知识库内容）
             pn_block = ("\n\n" + pn) if pn else ""
+            # 涉外国家判定：注入结论段 + 强制要求模型必须回答这两项
+            country_block = ("\n\n" + country_note) if country_note else ""
+            country_req = ""
+            if country_note:
+                country_req = ("\n\n【涉外国家判定 · 必须回答】当事人提问涉及境外使用地"
+                               f"（{'、'.join(countries)}）。回答中必须明确给出两点：\n"
+                               "1. 该国通常做【单号】还是【双号】公证，并解释两者区别"
+                               "（单号＝仅公证中文原件；双号＝中文原件＋译文均公证）；\n"
+                               "2. 该国【是否必须办海牙认证（Apostille）】，"
+                               "还是需要领事认证（双认证）。\n"
+                               "以上两点若知识库未收录，须按下方「涉外国家判定」与"
+                               "网络检索结果作答，并明确标注为非知识库内容、"
+                               "以使用地机构及公证处最终口径为准；"
+                               "不得因知识库无此项而略过不答。")
             # 命中知识库、但条目存在内容缺口（字段空缺或问题提到的主题未覆盖）时，
             # 明确要求模型把「知识库没有、仅来自网络」的内容单独标注出来。
             gap_note = ""
@@ -1245,7 +1460,7 @@ class H(BaseHTTPRequestHandler):
             if missing:
                 ask = "、".join(missing)
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{web_block}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{web_block}\n\n"
                         f"【知识库全部事项目录】\n{kb_catalog()}\n\n"
                         f"【四要素核对结果】\n"
                         f"- 当事人已明确：{'、'.join(have) if have else '（无）'}\n"
@@ -1257,13 +1472,15 @@ class H(BaseHTTPRequestHandler):
                         f"3. 最后用一两句话请当事人补充仍缺失的要素（{ask}），不要展开长篇追问。\n"
                         f"注意：材料清单只能取自当事人所问事项对应的条目，严禁挪用其他事项的材料；"
                         f"该事项无材料信息时，明说「知识库暂未收录」，可引用网络结果并标注来源。"
+                        f"{country_req}"
                         f"{gap_note}")
             else:
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{web_block}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{web_block}\n\n"
                         f"【四要素核对结果】\n办什么公证、户籍在哪儿、在哪儿使用、用途是什么 —— 四项均已明确。\n\n"
                         f"请直接按「结论 → 依据 → 办理要素 → 材料清单 → 价格与时长 → 下一步」"
                         f"的结构给出完整分析，不要再追问任何要素。若涉及涉外，说明是否需要海牙认证。"
+                        f"{country_req}"
                         f"{gap_note}")
 
             if internal_view:
@@ -1316,6 +1533,8 @@ class H(BaseHTTPRequestHandler):
                     lines.append(web_txt + "\n")
                 else:
                     lines.append("知识库、官方底库与网络检索均未取得有效结果，建议补充文档或联系负责人确认。\n")
+                if country_note:
+                    lines.append("\n" + country_note + "\n")
                 if kb_ok and gaps and web_ok:
                     # 降级路径同样保证「非知识库内容」标注存在
                     lines.append("\n——\n（以下为非现有知识库内容，仅做参考）\n"
@@ -1339,6 +1558,22 @@ class H(BaseHTTPRequestHandler):
                         f"知识库条目中「{gap_labels}」暂无收录，"
                         f"以上回答中涉及该部分的内容与以下信息均来自联网检索，仅供参考：\n{web_txt}")
 
+            # 涉外判定的确定性兜底：用户明确要求「涉外 + 给了国家」时必须回答
+            # 「单号/双号」与「是否必须海牙」。模型若漏答（未同时出现单号/双号
+            # 与海牙相关表述），由系统强制补上判定段，不依赖模型自觉。
+            if country_note and not ("海牙" in ans or "Apostille" in ans
+                                     or "领事认证" in ans or "双认证" in ans):
+                ans += "\n\n——\n" + country_note
+
+            # 虚假来源兜底：本次并未取得任何检索结果（无官方清单、无网络结果）时，
+            # 模型若仍写了「根据网络检索/检索结果显示」等，属虚构来源，系统补正说明。
+            if not web_ok and not off_ok and not kb_ok:
+                if any(k in ans for k in ("网络检索", "检索结果", "联网搜索",
+                                          "官方清单", "司法部清单")):
+                    ans += ("\n\n——\n（说明：本次未从知识库、官方清单或网络检索中"
+                            "取得该事项的有效资料，上文中所述内容为一般性说明，"
+                            "具体以公证处口径为准。）")
+
             # 红线校验：模型回答若漏掉了知识库明确禁止项，系统强制补充
             rl = redline_notes(q + " " + vision_ctx, ans)
             if rl:
@@ -1348,7 +1583,7 @@ class H(BaseHTTPRequestHandler):
                                     "official": off_ok, "web": web_ok,
                                     "hits": [{"title": h["title"], "ok": h.get("ok", True), "no": h["no"]} for h in hits],
                                     "model": model, "mode": "llm",
-                                    "vision": vision_ctx})
+                                    "vision": vision_ctx, "countries": countries})
 
         if p == "/api/admin/login":
             ok = (b.get("pass") or "") == cfg.get("adminPass")

@@ -16,6 +16,7 @@
 import json
 import kb_data as K
 import kb_official as O
+import hague_data as HG
 
 API = "https://a4d528d066378aabd.app.workbuddy.host"
 
@@ -30,6 +31,9 @@ DATA = {
     "official": O.OFFICIAL,
     "quotesLite": [{"prov": q["prov"], "way": q["way"], "tr": q["tr"],
                     "period": q["period"], "periodAuth": q["periodAuth"]} for q in K.QUOTES],
+    # 涉外国家判定：外交部《公约》缔约国名单（127 国）+ 别名归一表
+    "hague": HG.HAGUE_MEMBERS_CN,
+    "hagueAlias": HG.HAGUE_ALIAS,
 }
 DATA_JS = json.dumps(DATA, ensure_ascii=False, separators=(",", ":"))
 
@@ -164,6 +168,67 @@ function missingFour(t){
   return Object.keys(g).filter(k=>!g[k]);
 }
 
+/* ================= 涉外国家判定：单号/双号 · 是否必须海牙 ================= */
+/* 判定依据：外交部《公约》缔约国名单（127 国），内嵌于 KB.hague */
+const COUNTRY_WORDS = ["申根","美国","加拿大","澳大利亚","澳洲","新西兰","英国","爱尔兰",
+  "日本","韩国","新加坡","马来西亚","泰国","越南","菲律宾","印度尼西亚","印尼","柬埔寨",
+  "老挝","缅甸","印度","巴基斯坦","孟加拉","斯里兰卡","尼泊尔","哈萨克斯坦","乌兹别克斯坦",
+  "蒙古","阿联酋","迪拜","沙特","卡塔尔","科威特","阿曼","巴林","以色列","土耳其","伊朗",
+  "伊拉克","约旦","德国","法国","意大利","西班牙","葡萄牙","荷兰","比利时","卢森堡","瑞士",
+  "奥地利","瑞典","挪威","丹麦","芬兰","冰岛","波兰","捷克","斯洛伐克","匈牙利","罗马尼亚",
+  "保加利亚","希腊","克罗地亚","斯洛文尼亚","塞尔维亚","俄罗斯","乌克兰","白俄罗斯",
+  "立陶宛","拉脱维亚","爱沙尼亚","格鲁吉亚","亚美尼亚","阿塞拜疆","埃及","南非","尼日利亚",
+  "肯尼亚","摩洛哥","阿尔及利亚","突尼斯","坦桑尼亚","加纳","巴西","阿根廷","智利","秘鲁",
+  "哥伦比亚","委内瑞拉","厄瓜多尔","玻利维亚","乌拉圭","巴拉圭","墨西哥","巴拿马",
+  "哥斯达黎加","古巴","牙买加","欧盟"];
+const COUNTRY_ALIAS = {"申根国":"申根","冰島":"冰岛","俄国":"俄罗斯","澳洲":"澳大利亚",
+  "印尼":"印度尼西亚","迪拜":"阿联酋","美利坚合众国":"美国",
+  "大不列颠及北爱尔兰联合王国":"英国","俄罗斯联邦":"俄罗斯","大韩民国":"韩国"};
+function findCountries(t){
+  t = t||"";
+  const found = [];
+  for(const c of COUNTRY_WORDS){
+    const i = t.indexOf(c);
+    if(i>=0) found.push([i, COUNTRY_ALIAS[c]||c]);
+  }
+  found.sort((a,b)=>a[0]-b[0]);
+  const out = [];
+  for(const [_i,c] of found) if(!out.includes(c)) out.push(c);
+  return out;
+}
+function isHague(c){
+  if(!c) return false;
+  if(c==="申根"||c==="欧盟") return true;
+  const n = COUNTRY_ALIAS[c]||c;
+  if((KB.hague||[]).includes(n)) return true;
+  for(const m of (KB.hague||[])){
+    if(m.length>=2 && (m.includes(n)||n.includes(m))) return true;
+  }
+  return false;
+}
+function countryText(countries){
+  if(!countries || !countries.length) return "";
+  const L = ["【涉外国家判定 · 单号/双号与海牙认证】"];
+  for(const c of countries){
+    L.push(`● ${c}：`);
+    L.push("  · 单号/双号：涉外通常建议做【双号】（双号＝中文原件＋译文均公证，"
+      + "境外对译文效力认可度更高）；若使用地只要中文文件，可做单号。以使用地要求为准。");
+    if(isHague(c)){
+      L.push(`  · 是否必须海牙认证：${c} 属《取消外国公文书认证要求的公约》（海牙公约）`
+        + "缔约国，通常办【海牙认证（附加证明书/Apostille）】即可，无需领事认证（双认证）。"
+        + "个别收件机构可能另有要求，办理前请再确认。");
+    }else{
+      L.push(`  · 是否必须海牙认证：${c} 不在外交部公布的《公约》缔约国名单内，`
+        + "通常需办【领事认证（使馆认证，即双认证）】：公证 → 外交部/地方外办认证 → "
+        + `使用国驻华使领馆认证。若该国近期已加入公约，以使用地机构口径为准。`);
+    }
+  }
+  L.push("");
+  L.push("（依据：中国领事服务网（外交部）《公约》缔约国名单，共 127 个缔约国；"
+    + "名单为官方口径，个别收件机构可能有额外要求。）");
+  return L.join("\\n");
+}
+
 /* ================= 回答生成（纯规则，绝不编造） ================= */
 const PERIOD_W = ["几天","多久","多长时间","多少天","几个工作日","周期","多久能拿","什么时候能拿"];
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
@@ -192,6 +257,8 @@ function answer(q){
   let hits = search(q).filter(it=>isRelevant(q,it));
   const miss = missingFour(q);
   const wantPeriod = PERIOD_W.some(w=>q.includes(w));
+  const countries = findCountries(q);
+  const cText = countryText(countries);
 
   if(hits.length){
     const it = hits[0];
@@ -204,6 +271,7 @@ function answer(q){
     if(wantPeriod) parts.push(periodText());
     const price = fieldOf(it,"价格");
     if(price && price!=="—") parts.push(`· 价格：${esc(price)}（最终以平台/公证处确认为准）`);
+    if(cText) parts.push("\\n"+cText);
     if(miss.length) parts.push(`\\n——\\n为给出准确结论，请补充：<b>${miss.join("、")}</b>。`);
     parts.push(`<span class="sm">依据：知识库条目 ${it.no}｜微信精简版不含 AI 分析，如需模型分析、联网核实、图片识别，请在浏览器打开完整版：${FULL}</span>`);
   } else {
@@ -211,8 +279,16 @@ function answer(q){
     if(off){
       parts.push(`当前知识库暂未收录该事项，以下为<b>司法部官方证明材料清单 · ${esc(off.name)}</b>：\\n${esc(off.text)}`);
       if(wantPeriod) parts.push(periodText());
+      if(cText) parts.push("\\n"+cText);
       if(miss.length) parts.push(`\\n——\\n请补充：<b>${miss.join("、")}</b>。`);
       parts.push(`<span class="sm">来源：司法部官方清单｜完整版可在浏览器打开：${FULL}</span>`);
+    } else if(cText){
+      // 涉外场景：即便未匹配到条目，也必须给出国家判定（用户明确要求）
+      parts.push("当前知识库暂未收录该事项的具体条目，以下为涉外使用地的判定结论：");
+      parts.push("\\n"+cText);
+      if(wantPeriod) parts.push(periodText());
+      if(miss.length) parts.push(`\\n——\\n请补充：<b>${miss.join("、")}</b>，以便匹配到具体公证事项。`);
+      parts.push(`<span class="sm">如需模型分析与联网核实，请在浏览器打开完整版：${FULL}</span>`);
     } else {
       parts.push("未能匹配到具体公证事项。请描述得更具体些，例如：\\n· 「委托买房需要什么材料」\\n· 「结婚证公证要几天」\\n· 「放弃继承权声明怎么办」\\n或点击下方快捷问题。");
     }
