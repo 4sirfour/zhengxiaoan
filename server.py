@@ -114,6 +114,8 @@ def load_cfg():
             if os.environ.get(n):
                 cfg["keys"][prov] = os.environ[n]
                 break
+    if os.environ.get("DEFAULT_MODEL"):
+        cfg["defaultModel"] = os.environ["DEFAULT_MODEL"]
     if os.path.exists(CFG_PATH):
         try:
             saved = json.load(open(CFG_PATH, encoding="utf-8"))

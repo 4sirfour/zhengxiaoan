@@ -11,41 +11,39 @@
 
 ---
 
-## 一、部署后端（约 5 分钟）
+## 一、部署后端
 
-本仓库已包含部署所需文件：`Procfile`、`requirements.txt`（纯标准库，无需依赖）。
+### 方案 A：Hugging Face Spaces（推荐 —— 免信用卡，永久 URL）
 
-### 推荐：Render（免费、免信用卡）
+Render 免费层对新账号要求验证信用卡；HF Spaces **全程不需要任何支付凭证**。
 
-1. 打开 <https://render.com>，用 GitHub 账号注册登录
-2. 点 **New → Web Service**，选择仓库 `4sirfour/zhengxiaoan`
-3. 按下面填写：
+1. 注册/登录 <https://huggingface.co>（邮箱即可，无需信用卡）
+2. 右上角头像 → **New Space**：
+   - Space name：`zhengxiaoan`
+   - SDK 选 **Docker** → Blank 模板
+   - Visibility 选 **Public**（前端跨域调用必需）
+3. Space 建好后，进入 **Files** 标签 → 上传 `hf-space.zip` 里的全部文件
+   （`Dockerfile`、`README.md`、`server.py`、`kb_data.py`、`kb_official.py`、
+   `hague_data.py`、`index.html`、`weixin.html`、`full.html`）
+4. **Settings → Variables and secrets** → 新建 Secret：
+   - Name：`GLM_API_KEY`
+   - Value：你的智谱 Key（Secret 不公开，比写进代码安全）
+5. 回到 **App** 标签等 2-3 分钟自动构建
+6. 永久地址：`https://<你的用户名>-zhengxiaoan.hf.space`
 
-   | 配置项 | 值 |
-   |---|---|
-   | Language / Runtime | `Python 3` |
-   | Build Command | `pip install -r requirements.txt` |
-   | Start Command | `python3 server.py` |
-   | Instance Type | `Free` |
+> Dockerfile 已内置 `PORT=7860` 与 `DEFAULT_MODEL=glm-4-flash`。
+> 免费层闲置约 48 小时后休眠，访问即自动唤醒（几十秒）。
 
-4. 展开 **Environment Variables**，添加模型 Key（**只放服务端，前端拿不到**）：
+### 方案 B：Render（免信用卡 ❌ 需验证卡）
 
-   | Key | Value |
-   |---|---|
-   | `GLM_API_KEY` | 你的智谱 Key |
-   | `DEEPSEEK_API_KEY` | （可选）DeepSeek Key |
-   | `ARK_API_KEY` | （可选）豆包 Key |
-
-5. 点 **Create Web Service**，等 2-3 分钟构建完成
-6. 拿到形如 `https://zhengxiaoan.onrender.com` 的地址，**这就是永久后端地址**
-
-> **免费层说明**：Render 免费实例闲置 15 分钟后会休眠，下次访问需等约 30 秒冷启动。
-> 页面会正常等待，不会报错。如需常驻可升级付费层，或改用 Railway（有每月免费额度）。
+新账号部署免费 Web Service 会被要求绑定信用卡（防滥用验证）。如果愿意绑卡：
+Start Command 填 `python3 server.py`，环境变量 `GLM_API_KEY`，
+构建 `pip install -r requirements.txt`。地址形如 `https://xxx.onrender.com`。
 
 ### 验证后端
 
 ```bash
-curl https://你的地址.onrender.com/api/models
+curl https://你的地址/api/models
 # 应返回 JSON，其中 glm-4-flash 的 ready 为 true
 ```
 
