@@ -34,6 +34,12 @@ DATA = {
     # 涉外国家判定：外交部《公约》缔约国名单（127 国）+ 别名归一表
     "hague": HG.HAGUE_MEMBERS_CN,
     "hagueAlias": HG.HAGUE_ALIAS,
+    # 口语 → 官方规范术语（用于官方清单匹配与相近条目提醒）
+    "spoken": {"意向监护": "意定监护", "意向监护公证": "意定监护",
+               "意定监护公证": "意定监护", "监护公证": "法定监护",
+               "监护权公证": "法定监护", "转让股权": "股权转让协议",
+               "股权转让": "股权转让协议", "遗嘱公证": "处理事务的遗嘱",
+               "遗嘱": "处理事务的遗嘱", "公司股权协议": "股权转让协议"},
 }
 DATA_JS = json.dumps(DATA, ensure_ascii=False, separators=(",", ":"))
 
@@ -250,6 +256,20 @@ function officialLookup(q){
         text: m.map((x,i)=>`  ${i+1}. ${x}`).join("\\n")};
     }
   }
+  // 口语词形预替换：问句含口语键（如「意向监护」）时，用规范术语再查一轮
+  const spoken = KB.spoken || {};
+  for(const sp of Object.keys(spoken).sort((a,b)=>b.length-a.length)){
+    if(q.includes(sp)){
+      const formal = spoken[sp];
+      for(const k of keys){
+        if(k===formal || k.includes(formal) || formal.includes(k)){
+          const m = KB.official[k].materials || [];
+          return {name: KB.official[k].name || k, spoken: sp, formal: formal,
+            text: m.map((x,i)=>`  ${i+1}. ${x}`).join("\\n")};
+        }
+      }
+    }
+  }
   return null;
 }
 function answer(q){
@@ -259,6 +279,26 @@ function answer(q){
   const wantPeriod = PERIOD_W.some(w=>q.includes(w));
   const countries = findCountries(q);
   const cText = countryText(countries);
+  // 口语词形检测：问句含口语写法且官方清单有规范事项时，
+  // 先展示规范事项知识点，命中的 KB 条目降级为「相近条目参考」
+  const offPre = officialLookup(q);
+  const spokenMatch = offPre && offPre.spoken && offPre.formal;
+
+  if(spokenMatch){
+    parts.push(`您问的「${esc(offPre.spoken)}」是口语写法，对应官方规范事项 <b>${esc(offPre.formal)}</b>。`);
+    parts.push(`\\n■ ${esc(offPre.name)}［来源：司法部官方证明材料清单］\\n${esc(offPre.text)}`);
+    if(hits.length){
+      const it0 = hits[0];
+      parts.push(`\\n——\\n说明：知识库中的「${esc(it0.name)}」条目针对的是<b>其他监护相关事项</b>（监护权变更、过继、收养等，此类声明无效不能公证），与<b>${esc(offPre.formal)}</b>（法律允许的书面协议安排）<b>不是同一事项</b>，该条目的「不能办理」结论不适用于您的问题。`);
+    }
+    if(wantPeriod) parts.push(periodText());
+    if(cText) parts.push("\\n"+cText);
+    if(miss.length) parts.push(`\\n——\\n为给出准确结论，请补充：<b>${miss.join("、")}</b>。`);
+    parts.push(`<span class="sm">价格以办理公证处对「${esc(offPre.formal)}」的报价为准｜如需模型分析与联网核实，请在浏览器打开完整版：${FULL}</span>`);
+    if(q.includes("代收") && !/不能代收/.test(parts.join("")))
+      parts.push(`<div class="hl">⚠️ 口径提示：若委托书涉及授权受托人<b>代收房款</b>——按知识库口径，<b>卖房款项不能代收</b>（条目 1「要求」）。请以办理公证处最终口径为准。</div>`);
+    return parts.join("\\n");
+  }
 
   if(hits.length){
     const it = hits[0];

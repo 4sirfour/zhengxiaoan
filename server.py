@@ -688,6 +688,26 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
 4. 官方清单也没有时，用「网络检索结果」作答，并明确标注来自网络检索、仅供参考、须以使用地公证处口径为准。
 5. 以上都没有时，才说明「当前知识库未提供」，并建议补充文档或联系负责人确认。
 
+【未完全匹配 · 展示相关知识点（重要）】
+当事人问的事项在知识库里**没有完全匹配的条目**时（上下文会出现
+「相关知识点 · 知识库暂无与提问完全匹配的条目」块），必须遵守：
+1. **不得直接套用相近条目的结论**。例如相近条目说「监护权变更不能公证」，
+   不能据此把当事人问的「意定监护公证」判为不可办理——两者是不同事项，
+   意定监护恰恰是《民法典》允许的书面约定。相近条目只能作为背景参考并标注差异。
+2. **不得猜价格、不得编造材料清单**。禁止「可能 699 元起」「建议准备以下可能
+   需要的材料」这类模糊编造；未收录就说未收录。
+3. **必须展示相关知识点**（这是当事人明确要求的行为），组织为：
+   ① 概念与法律依据：这个事项是什么、哪部法律哪一条规定（可引用上下文中的
+      官方清单相关事项、联网检索结果；不得虚构条款号）；
+   ② 办理要求与限制：官方清单相关事项的材料清单、相近条目中的限制口径
+      （标注条目号，并说明与所问事项的差异）；
+   ③ 常见用途与场景：这类公证通常用在哪；
+   ④ 明确说明「知识库暂无该具体事项条目，以下为相关知识点整理」，
+      最终以办理公证处口径为准。
+4. 上下文有「司法部官方清单 · 相关事项」的，材料部分引用它（标注来源），
+   而不是自行罗列。
+5. 上下文有联网检索结果时引用并标注「来自网络检索」；没有时不得虚构来源。
+
 【涉外公证 · 国家判定（必须回答）】
 当事人的公证用于境外、且提到了具体国家/地区（如「美国」「韩国」「申根」「马来西亚」）时，
 除常规分析外，**必须正面回答以下两件事，缺一不可**：
@@ -935,7 +955,121 @@ _OFFICIAL_SYNONYM = {
     "遗嘱": "处理事务的遗嘱",
     "遗嘱公证": "处理事务的遗嘱",
     "公司股权协议": "股权转让协议",
+    "意向监护": "意定监护",
+    "意向监护公证": "意定监护",
+    "意定监护公证": "意定监护",
+    "监护公证": "法定监护",
+    "监护权公证": "法定监护",
 }
+
+# 2 字片段黑名单：这些片段太通用，不作为「相关条目」的判定依据
+_GENERIC_SEGS = {"公证", "证明", "办理", "书证", "证公", "明书", "件复", "复印",
+                 "委托书", "声明书", "事项", "问题", "怎么", "什么", "需要",
+                 "可以", "能否", "是不是", "多少", "哪里", "哪个"}
+
+
+def _core_segs(text):
+    """抽问句中的 2 字汉字片段（用于相关主题匹配）。"""
+    t = text or ""
+    out = set()
+    for i in range(len(t) - 1):
+        seg = t[i:i + 2]
+        if re.match(r"^[\u4e00-\u9fa5]{2}$", seg) and seg not in _GENERIC_SEGS:
+            out.add(seg)
+    return out
+
+
+def official_related(query, limit=3):
+    """官方清单中与问句主题**相关**的条目（非精确匹配）。
+
+    匹配方式：问句与官方键名共享有意义的 2 字片段（如「意向监护公证」
+    与「意定监护」共享「监护」）。用于知识库未完全命中时展示相关知识点。
+    返回 [(key, info), ...] 按共享度降序。
+    """
+    qsegs = _core_segs(query)
+    if not qsegs:
+        return []
+    scored = []
+    for key, info in O.OFFICIAL.items():
+        ksegs = _core_segs(key)
+        common = qsegs & ksegs
+        if common:
+            scored.append((len(common), key, info))
+    scored.sort(key=lambda x: (-x[0], len(x[1])))
+    return [(k, info) for _s, k, info in scored[:limit]]
+
+
+def _normalize_topic_words(q):
+    """口语 → 官方/规范术语替换（用于联网检索），返回 (规范词列表, 是否发生替换)。"""
+    words = []
+    hit = False
+    for spoken, formal in _OFFICIAL_SYNONYM.items():
+        if spoken in (q or ""):
+            words.append(formal)
+            hit = True
+    return words, hit
+
+
+def related_knowledge_note(q, kb_hits=(), official_hit=False, want_web=True):
+    """组装「相关知识点」块：知识库无完全匹配条目时，把相关知识展示给当事人。
+
+    用户明确要求：库里没有时，不要只回「未收录 + 猜测」，而要把相关的
+    知识点、办理要求、限制等展示出来。本函数收集三类素材：
+      ① 官方清单相关事项（材料参考）——权威；
+      ② 知识库相关条目（标注「非完全匹配」，突出限制/要求字段）；
+      ③ 联网检索（用规范术语，如「意向监护」→「意定监护」）。
+    返回 (文本, 联网文本, 联网是否成功)。
+    """
+    rel_off = official_related(q)
+    rel_off = [(k, info) for k, info in rel_off] if not official_hit else []
+    kb_rel = [h for h in (kb_hits or []) if h.get("_score", 0) >= 0.5][:3]
+
+    web_txt, web_ok = "", False
+    if want_web:
+        norm_words, replaced = _normalize_topic_words(q)
+        queries = []
+        if replaced:
+            queries.append(" ".join(norm_words) + " 公证 办理要求 法律规定")
+        base = re.sub(r"(怎么|如何|需要|什么|哪些|办理|流程|材料|资料|吗|\?|？|。|，|,|\s)+",
+                      " ", q).strip()
+        queries.append(f"{base} 公证 办理要求 限制")
+        for qs in queries:
+            t, ok = web_search(qs, limit=4, require_notary=True)
+            if ok:
+                web_txt, web_ok = t, ok
+                break
+
+    if not rel_off and not kb_rel and not web_ok:
+        return "", web_txt, web_ok
+
+    lines = ["【相关知识点 · 知识库暂无与提问完全匹配的条目】"]
+    if rel_off:
+        lines.append("")
+        lines.append("一、司法部官方清单中的相关事项（材料参考，注意区分具体事项）：")
+        for k, info in rel_off:
+            mats = "\n".join(f"    {i}. {m}" for i, m in enumerate(info["materials"], 1))
+            lines.append(f"  ◦ {info.get('name') or k}：")
+            lines.append(mats)
+    if kb_rel:
+        lines.append("")
+        lines.append("二、知识库中的相关条目（与所问事项相近，但**不是同一事项**，注意区分）：")
+        for h in kb_rel:
+            tag = "☑ 可办理" if h.get("ok", True) else "☐ 不能办理"
+            lines.append(f"  ◦ 条目 {h['no']} {h['title'].split('·')[-1].strip()}［{tag}］")
+            body = h.get("content") or ""
+            keep = [l for l in body.split("\n")
+                    if any(l.startswith(f"{f}：") for f in ("结论", "要求", "办什么公证", "用途是什么"))
+                    and l.split("：", 1)[-1].strip()]
+            for l in keep[:3]:
+                lines.append(f"      {l}")
+    if web_ok and web_txt:
+        lines.append("")
+        lines.append("三、联网检索 · 该主题的法律依据与办理要求：")
+        lines.append(web_txt)
+    lines.append("")
+    lines.append("（以上为相关知识点的整理，并非对所问事项的最终结论；"
+                 "具体能否办理、材料与费用，以办理公证处口径为准。）")
+    return "\n".join(lines), web_txt, web_ok
 
 
 def official_lookup(query, extra_keys=None):
@@ -955,6 +1089,17 @@ def official_lookup(query, extra_keys=None):
         if key in q:
             hit = O.OFFICIAL[key]
             break
+    # 口语词形预替换：问句含 _OFFICIAL_SYNONYM 的口语键时，用其规范词再匹配一轮
+    # （如口语「意向监护」→ 官方术语「意定监护」，字面不同导致直接匹配漏检）
+    if not hit:
+        for spoken, formal in _OFFICIAL_SYNONYM.items():
+            if spoken in q:
+                for key in sorted(O.OFFICIAL.keys(), key=len, reverse=True):
+                    if key == formal or key in formal or formal in key:
+                        hit = O.OFFICIAL[key]
+                        break
+            if hit:
+                break
     if not hit:
         hit = O.lookup(q)
     # 候选词逐个尝试：候补词本身 + 口语→官方用词的同义映射
@@ -1265,15 +1410,63 @@ class H(BaseHTTPRequestHandler):
                     hits = w_strong[:topk]
                     strong_hits = hits
                     kb_ok = True
+            # 口语词形检测：问句含 _OFFICIAL_SYNONYM 的口语键（如「意向监护」），
+            # 说明问句用词与知识库/官方条目的规范术语存在差异——即使 KB 命中，
+            # 命中条目也可能只是「相关背景」而非同一事项，需要提醒模型辨别。
+            spoken_forms = [(sp, _OFFICIAL_SYNONYM[sp]) for sp in _OFFICIAL_SYNONYM
+                            if sp in q and len(sp) >= 3]
+            mismatch_note = ""
             off_txt, off_ok = "", False
             web_txt, web_ok = "", False
             gaps = []
+            rel_note = ""
             if not kb_ok:
                 # 知识库无对应条目 → 先查司法部官方材料底库，再补网络检索；
                 # 严禁挪用其他条目的材料
                 hits = []
                 off_txt, off_ok = official_lookup(q)
                 web_txt, web_ok = web_search(f"{q} 公证 所需材料 办理", limit=4)
+                # 相关知识点：库里没有完全匹配时，把官方清单相关事项、
+                # 知识库相近条目、联网检索到的法律依据/办理要求展示给当事人
+                # （已取得官方精确命中或已联网成功时不再重复检索）
+                rel_note, rel_web, rel_web_ok = related_knowledge_note(
+                    q, kb_hits=wider, official_hit=off_ok,
+                    want_web=not web_ok)
+                if rel_web_ok and not web_ok:
+                    web_txt, web_ok = rel_web, True
+            elif spoken_forms:
+                # KB 有命中、但问句含口语词形（如「意向监护」≠规范术语「意定监护」）：
+                # 官方清单按同义词替换匹配规范事项 + 相关知识点素材 + 匹配度提醒，
+                # 防止模型把相近条目结论直接套到所问事项上
+                off_txt, off_ok = official_lookup(q)
+                rel_note, rel_web, rel_web_ok = related_knowledge_note(
+                    q, kb_hits=strong_hits, official_hit=off_ok,
+                    want_web=True)
+                if rel_web_ok:
+                    web_txt, web_ok = (web_txt + "\n\n" + rel_web) if web_ok else rel_web, True
+                sp, formal = spoken_forms[0]
+                first_name = (strong_hits[0]["title"].split("·")[-1].strip()
+                              if strong_hits else "")
+                mismatch_note = (
+                    f"【匹配度提醒 · 必须先展示相关知识点】当事人提问中的「{sp}」是口语写法，"
+                    f"对应官方规范术语「{formal}」——这**大概率就是当事人要办的事项**"
+                    f"（司法部官方清单已收录「{formal}」，材料清单见下方官方清单块）。\n"
+                    f"检索命中的条目「{first_name}」针对的是**其他监护事项**（监护权变更、"
+                    f"过继、收养等法定监护问题），与「{formal}」**不是同一事项**，"
+                    f"其「不可办理」结论**不适用于**当事人的问题。\n"
+                    f"请严格按以下结构回答（不要等当事人补充信息才给内容）：\n"
+                    f"1. 先讲「{formal}」是什么：法律允许当事人以书面协议预先确定监护人"
+                    f"（如上下文联网检索有法律依据则引用并标注，没有则用通用表述、"
+                    f"不虚构条款号）；\n"
+                    f"2. 完整展示官方清单「{formal}」的材料清单（逐条列出，标注"
+                    f"「来源：司法部官方证明材料清单」）；\n"
+                    f"3. 说明相近条目「{first_name}」与「{formal}」的区别"
+                    f"（条目针对监护权变更/过继/收养，声明无效不能公证；"
+                    f"而{formal}是法律允许的协议安排），让当事人对号入座；\n"
+                    f"4. 最后再请当事人补充户籍、用途等要素；\n"
+                    f"5. **不得给出「{formal}」的具体价格**——知识库没有该规范事项的定价，"
+                    f"相近条目的价格不适用；若确需提及价格区间，必须标注"
+                    f"「为相近事项参考价，以公证处报价为准」。")
             else:
                 hits = strong_hits
                 # 若命中的只是「其他/一般」这类兜底桶，而司法部官方清单里
@@ -1318,6 +1511,9 @@ class H(BaseHTTPRequestHandler):
             countries = find_countries(q_all)
             overseas = is_overseas_q(q_all, countries)
             country_note = ""
+            # 口语词形检测：问句含 _OFFICIAL_SYNONYM 的口语键（如「意向监护」），
+            # 说明问句用词与知识库/官方条目的规范术语存在差异——即使 KB 命中，
+            # 命中条目也可能只是「相关背景」而非同一事项，需要提醒模型辨别。
             if countries and overseas:
                 # 事项主体（用于把检索式聚焦到具体公证类型）
                 _subj = ""
@@ -1353,11 +1549,23 @@ class H(BaseHTTPRequestHandler):
                     if country_note:
                         # 涉外国家判定优先展示（用户明确要求的回答项）
                         parts = ["【仅知识库检索 · 未启用模型分析】\n", country_note + "\n"]
+                        if rel_note:
+                            parts.append(rel_note + "\n")
                         if off_ok or web_ok:
                             parts.append("以下是权威/网络检索到的相关信息：\n")
                             if off_ok: parts.append(off_txt + "\n")
-                            if web_ok and web_txt and web_txt not in country_note:
+                            if web_ok and web_txt and web_txt not in country_note and web_txt not in rel_note:
                                 parts.append(web_txt + "\n")
+                        parts.append("如需完整分析，请右上角切换到模型分析；"
+                                     "或从下方目录指出想办的事项。\n\n"
+                                     "【知识库全部事项目录】\n" + kb_catalog())
+                        ans = "\n".join(parts)
+                    elif rel_note:
+                        # 相关知识点：官方清单相关事项 + 知识库相近条目 + 联网法律依据
+                        parts = ["【仅知识库检索 · 未启用模型分析】\n", rel_note + "\n"]
+                        if off_ok: parts.append(off_txt + "\n")
+                        if web_ok and web_txt and web_txt not in rel_note:
+                            parts.append(web_txt + "\n")
                         parts.append("如需完整分析，请右上角切换到模型分析；"
                                      "或从下方目录指出想办的事项。\n\n"
                                      "【知识库全部事项目录】\n" + kb_catalog())
@@ -1399,6 +1607,14 @@ class H(BaseHTTPRequestHandler):
                 if country_note:
                     # 涉外国家判定（单号/双号 · 是否必须海牙）
                     lines.append(country_note + "\n")
+                if mismatch_note:
+                    # 口语词形提示：命中的条目可能是相关背景而非同一事项
+                    sp0, formal0 = spoken_forms[0]
+                    lines.append(
+                        f"——\n⚠️ 提示：您问的「{sp0}」是口语写法，官方规范术语为「{formal0}」。"
+                        f"上方条目为**相近事项**（不一定是同一事项），其结论不能直接套用。\n"
+                        + (f"规范术语对应的官方清单材料如下：\n{off_txt}\n" if off_ok
+                           else f"（官方清单按「{formal0}」未取得材料清单，可切换模型分析联网核实。）\n"))
                 if missing:
                     lines.append("——\n提示：四要素尚缺「" + "、".join(missing) +
                                  "」，补齐后可给出更精准的判断（右上角切换到模型分析可获得完整解读）。")
@@ -1429,6 +1645,11 @@ class H(BaseHTTPRequestHandler):
                               "只能说明该事项暂未收录，可用一般常识谨慎说明，"
                               "但不得给出具体价格与办理周期的承诺值。）")
             web_block = ("\n\n" + "\n\n".join(blocks)) if blocks else ""
+            # 相关知识点块：知识库无完全匹配时，把官方清单相关事项、相近条目、
+            # 联网法律依据注入上下文，供模型组织「相关知识点」展示
+            rel_block = ("\n\n" + rel_note) if rel_note else ""
+            # 匹配度提醒块：口语词形与规范术语有差异时，防止模型套用相近条目结论
+            mismatch_block = ("\n\n" + mismatch_note) if mismatch_note else ""
             # 问「要几天/多久」时把各省报价表的周期数据注入上下文（知识库内容）
             pn_block = ("\n\n" + pn) if pn else ""
             # 涉外国家判定：注入结论段 + 强制要求模型必须回答这两项
@@ -1460,7 +1681,7 @@ class H(BaseHTTPRequestHandler):
             if missing:
                 ask = "、".join(missing)
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{web_block}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{rel_block}{mismatch_block}{web_block}\n\n"
                         f"【知识库全部事项目录】\n{kb_catalog()}\n\n"
                         f"【四要素核对结果】\n"
                         f"- 当事人已明确：{'、'.join(have) if have else '（无）'}\n"
@@ -1476,7 +1697,7 @@ class H(BaseHTTPRequestHandler):
                         f"{gap_note}")
             else:
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{web_block}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{rel_block}{mismatch_block}{web_block}\n\n"
                         f"【四要素核对结果】\n办什么公证、户籍在哪儿、在哪儿使用、用途是什么 —— 四项均已明确。\n\n"
                         f"请直接按「结论 → 依据 → 办理要素 → 材料清单 → 价格与时长 → 下一步」"
                         f"的结构给出完整分析，不要再追问任何要素。若涉及涉外，说明是否需要海牙认证。"
@@ -1573,6 +1794,14 @@ class H(BaseHTTPRequestHandler):
                     ans += ("\n\n——\n（说明：本次未从知识库、官方清单或网络检索中"
                             "取得该事项的有效资料，上文中所述内容为一般性说明，"
                             "具体以公证处口径为准。）")
+
+            # 口语词形场景的价格兜底：规范事项在知识库无定价，模型给出的价格
+            # 可能来自相近条目——强制补充来源说明，避免误认为是准确报价
+            if mismatch_note and re.search(r"\d+(?:\.\d+)?\s*元", ans):
+                _f0 = spoken_forms[0][1]
+                ans += (f"\n\n——\n（价格说明：知识库暂无「{_f0}」的专门定价，上文中出现的价格"
+                        f"为相近事项的价格档，仅供参考；实际费用以办理公证处对「{_f0}」"
+                        f"的报价为准。）")
 
             # 红线校验：模型回答若漏掉了知识库明确禁止项，系统强制补充
             rl = redline_notes(q + " " + vision_ctx, ans)
