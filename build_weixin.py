@@ -87,6 +87,45 @@ body{margin:0;background:var(--bg);color:var(--ink);
   font-size:14px;resize:none;outline:0;height:42px;max-height:110px;line-height:1.5;background:var(--bg)}
 .cwrap button{border:0;background:var(--brand);color:#fff;border-radius:10px;padding:10px 17px;font-size:14px}
 .cwrap button:disabled{background:#c7d2e8}
+
+/* ===== GitHub Pages 桌面端适配（仅宽屏生效，移动端不受影响） ===== */
+@media (min-width: 760px) {
+  body {
+    background: linear-gradient(160deg,#eef3fb 0%,#e2e9f6 100%) !important;
+    display: flex !important;
+    flex-direction: column !important;   /* 关键：纵向堆叠，保持原版结构 */
+    align-items: center !important;
+    padding: 26px 16px 44px !important;
+    min-height: 100vh !important;
+    box-sizing: border-box !important;
+  }
+  body > * { width: 100%; max-width: 680px !important; }
+
+  /* 三段拼成一张卡片：头部圆顶、输入区圆底、聊天区白底 */
+  #top {
+    border-radius: 16px 16px 0 0 !important;
+    box-shadow: 0 10px 30px rgba(30,50,90,.10) !important;
+  }
+  #msgs {
+    background: #fff !important;
+    box-shadow: 0 18px 46px rgba(30,50,90,.12) !important;
+    padding-left: 14px !important; padding-right: 14px !important;
+    min-height: 52vh !important;
+  }
+  .chips {
+    background: #fff !important;
+    box-shadow: 0 18px 46px rgba(30,50,90,.12) !important;
+    padding: 4px 14px 10px !important;
+  }
+  #composer {
+    background: #fff !important;
+    border-radius: 0 0 16px 16px !important;
+    box-shadow: 0 18px 46px rgba(30,50,90,.12) !important;
+    padding-bottom: 16px !important;
+  }
+}
+@media (min-width: 1100px) { body > * { max-width: 720px !important; } }
+
 </style>
 </head>
 <body>
