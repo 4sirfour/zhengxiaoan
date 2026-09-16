@@ -1250,7 +1250,8 @@ class H(BaseHTTPRequestHandler):
     def do_HEAD(self):
         # HEAD 探测支持（此前未实现返回 501，部分客户端健康检查会失败）
         p = urlparse(self.path).path
-        name = {"/": "index.html", "/index.html": "index.html",
+        name = {"/": "full.html", "/full.html": "full.html",
+                "/index.html": "index.html",
                 "/weixin.html": "weixin.html"}.get(p)
         f = os.path.join(os.path.dirname(os.path.abspath(__file__)), name) if name else ""
         if f and os.path.exists(f):
@@ -1268,7 +1269,15 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path).path
         cfg = load_cfg()
-        if p in ("/", "/index.html"):
+        # 完整版（含模型选择/图片识别，调用 /api/*）
+        if p in ("/", "/full.html"):
+            f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "full.html")
+            if os.path.exists(f):
+                return self._send(200, open(f, encoding="utf-8").read(), "text/html; charset=utf-8")
+            return self._send(404, "full.html not found", "text/plain; charset=utf-8")
+
+        # 静态版（与 GitHub Pages 一致，零后端依赖）
+        if p == "/index.html":
             f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
             if os.path.exists(f):
                 return self._send(200, open(f, encoding="utf-8").read(), "text/html; charset=utf-8")

@@ -138,7 +138,16 @@ body{margin:0;background:var(--bg);color:var(--ink);
 </div></div>
 <script>
 const KB = __DATA__;
-const FULL = __FULLURL__;
+// 完整版地址：由后端服务提供本页时自动探测并指向站点首页；
+// 纯静态托管（GitHub Pages 等）时保持为空，相关提示自动省略
+let FULL = "";
+(async()=>{ try{
+  const r = await fetch("/api/models", {cache:"no-store"});
+  if(r.ok){
+    FULL = location.origin.replace(/\/+$/,"") + "/";
+    push("a", `如需 <b>AI 模型分析、联网核实、上传图片识别</b> 完整能力，请打开<a href="${FULL}">完整版</a>。`);
+  }
+}catch(e){} })();
 
 /* ================= 检索（与后端同源的简化实现） ================= */
 const GENERIC = new Set("公证 办理 申请 需要 什么 材料 如何 怎么 可以 是否 请问 我想 我要 户籍 使用 用途 用于 国内 国外 境外 多少 钱 几天 时间".split(" "));
@@ -335,7 +344,7 @@ function answer(q){
     if(wantPeriod) parts.push(periodText());
     if(cText) parts.push("\\n"+cText);
     if(miss.length) parts.push(`\\n——\\n为给出准确结论，请补充：<b>${miss.join("、")}</b>。`);
-    parts.push(`<span class="sm">价格以办理公证处对「${esc(offPre.formal)}」的报价为准｜如需模型分析与联网核实，请在浏览器打开完整版：${FULL}</span>`);
+    parts.push(`<span class="sm">价格以办理公证处对「${esc(offPre.formal)}」的报价为准${FULL?`｜如需模型分析与联网核实，请打开<a href="${FULL}">完整版</a>`:""}</span>`);
     if(q.includes("代收") && !/不能代收/.test(parts.join("")))
       parts.push(`<div class="hl">⚠️ 口径提示：若委托书涉及授权受托人<b>代收房款</b>——按知识库口径，<b>卖房款项不能代收</b>（条目 1「要求」）。请以办理公证处最终口径为准。</div>`);
     return parts.join("\\n");
@@ -354,7 +363,7 @@ function answer(q){
     if(price && price!=="—") parts.push(`· 价格：${esc(price)}（最终以平台/公证处确认为准）`);
     if(cText) parts.push("\\n"+cText);
     if(miss.length) parts.push(`\\n——\\n为给出准确结论，请补充：<b>${miss.join("、")}</b>。`);
-    parts.push(`<span class="sm">依据：知识库条目 ${it.no}｜微信精简版不含 AI 分析，如需模型分析、联网核实、图片识别，请在浏览器打开完整版：${FULL}</span>`);
+    parts.push(`<span class="sm">依据：知识库条目 ${it.no}${FULL?`｜微信精简版不含 AI 分析，如需模型分析、联网核实、图片识别，请打开<a href="${FULL}">完整版</a>`:""}</span>`);
   } else {
     const off = officialLookup(q);
     if(off){
@@ -362,14 +371,14 @@ function answer(q){
       if(wantPeriod) parts.push(periodText());
       if(cText) parts.push("\\n"+cText);
       if(miss.length) parts.push(`\\n——\\n请补充：<b>${miss.join("、")}</b>。`);
-      parts.push(`<span class="sm">来源：司法部官方清单｜完整版可在浏览器打开：${FULL}</span>`);
+      parts.push(`<span class="sm">来源：司法部官方清单${FULL?`｜完整版：<a href="${FULL}">打开</a>`:""}</span>`);
     } else if(cText){
       // 涉外场景：即便未匹配到条目，也必须给出国家判定（用户明确要求）
       parts.push("当前知识库暂未收录该事项的具体条目，以下为涉外使用地的判定结论：");
       parts.push("\\n"+cText);
       if(wantPeriod) parts.push(periodText());
       if(miss.length) parts.push(`\\n——\\n请补充：<b>${miss.join("、")}</b>，以便匹配到具体公证事项。`);
-      parts.push(`<span class="sm">如需模型分析与联网核实，请在浏览器打开完整版：${FULL}</span>`);
+      parts.push(`<span class="sm">${FULL?`如需模型分析与联网核实，请打开<a href="${FULL}">完整版</a>`:"（本页为静态精简版，不含模型分析与联网核实）"}</span>`);
     } else {
       parts.push("未能匹配到具体公证事项。请描述得更具体些，例如：\\n· 「委托买房需要什么材料」\\n· 「结婚证公证要几天」\\n· 「放弃继承权声明怎么办」\\n或点击下方快捷问题。");
     }
@@ -413,7 +422,7 @@ $("#inp").addEventListener("input", function(){ this.style.height="auto"; this.s
 push("a", `您好，我是证小安公证助手（<b>微信精简版</b>）。
 · 直接提问即可，例如「委托买房需要什么材料」「结婚证公证要几天」
 · 覆盖 ${KB.kb.length} 项公证事项、司法部官方材料清单 ${Object.keys(KB.official).length} 项、各省办理周期
-<div class="hl">当前处于微信内置浏览器。如需 <b>AI 模型分析、联网核实、上传图片识别</b> 完整能力，请复制链接到浏览器打开完整版：\\n${FULL}</div>`);
+`);
 </script>
 </body>
 </html>"""

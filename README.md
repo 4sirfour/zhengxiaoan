@@ -21,21 +21,22 @@
 无需后端即可提供知识库检索、涉外国家判定与相关知识点展示。
 
 - 站点地址：<https://4sirfour.github.io/zhengxiaoan/>
-- 入口：仓库根目录 `index.html`（由 `weixin.html` + 桌面端适配样式生成）
+- 入口：仓库根目录 `index.html`（由 `weixin.html` + 桌面端适配样式生成，`build_weixin.py` 一键重建）
+
+**开启 Pages**（仓库设置一次性操作）：Settings → Pages → Source 选
+「Deploy from a branch」→ Branch 选 `main` / `(root)` → Save。
+首次开启后 1-2 分钟生效。
 
 > **说明**：静态版不含 AI 模型分析、联网核实与图片识别——这些能力需要后端在线。
-> 页内提示会引导用户到完整版。`build_weixin.py` 中的 `API` 常量即完整版后端地址。
+> 静态页会自动探测：由后端服务提供时，提示内会出现指向完整版的链接；
+> 纯静态托管时则如实说明能力边界，不留死链。
 
-重新生成入口页：
+## 完整版（需后端）
 
-```bash
-python3 - <<'PY'
-src = open('weixin.html', encoding='utf-8').read()
-desktop_css = open('desktop_css.txt', encoding='utf-8').read()  # 或直接内联
-src = src.replace('</style>', desktop_css + '\n</style>', 1)
-open('index.html','w',encoding='utf-8').write(src)
-PY
-```
+`full.html` 为完整版前端（模型选择器、图片识别、联网核实），仅能由 `server.py` 提供：
+
+- `/`、`/full.html` → 完整版
+- `/index.html`、`/weixin.html` → 静态版（与 Pages 内容一致）
 
 ## 测试
 
