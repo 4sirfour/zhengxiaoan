@@ -346,8 +346,15 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* 后端地址：优先 URL 参数 ?api=https://xxx，其次 window.API_BASE（部署时注入），
+   都为空则用同源（本页由 server.py 直接提供时的默认行为）。
+   例：https://4sirfour.github.io/zhengxiaoan/full.html?api=https://xxx.onrender.com */
+const API_BASE = (new URLSearchParams(location.search).get('api')
+                  || (typeof window !== 'undefined' && window.API_BASE) || '').replace(/\/+$/,'');
+
 const api = async (p, o={}) => {
-  const r = await fetch(p, Object.assign({headers:{'Content-Type':'application/json'}}, o));
+  const r = await fetch(API_BASE + p, Object.assign({headers:{'Content-Type':'application/json'}}, o));
   const d = await r.json().catch(()=>({}));
   if(!r.ok && d.error) throw new Error(d.error);
   return d;
