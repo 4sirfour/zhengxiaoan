@@ -379,8 +379,14 @@ def _core_subject(name):
     n = n.split("·")[-1].strip()                       # 去大类前缀
     n = re.sub(r"^\d+[\.、]\s*", "", n)               # 去「17. 」「17、」
     n = re.sub(r"^(涉外的?|国内的?)", "", n)          # 去高频通用前缀
+    n0 = n                                            # 保留剥括号后的复合名
     for s in SUFFIX_WORDS:
         n = n.replace(s, "")
+    n = n.strip(" 、，,-—")
+    if not n.replace("/", "").strip():
+        # 核心词被类型后缀吃光（如「协议/合同公证」→「协议/合同」即主题本身）：
+        # 保留剥括号后的复合名，交由规则2按斜杠切分片段判定。
+        n = n0
     return n.strip(" 、，,-—")
 
 
