@@ -108,6 +108,13 @@ o = ask('合作合同可以做协议公证吗');
 chk('合同公证：受理口径', o.includes('合同公证') || o.includes('协议公证'), o);
 chk('合同公证：红线说明', o.includes('公序良俗') || o.includes('不予受理') || o.includes('受理'), o);
 
+// ---- 涉外分项报价（驾驶证公证 · 报价单口径）----
+o = ask('驾驶证公证去美国怎么收费');
+chk('驾驶证涉外：国家判定', o.includes('美国'), o);
+chk('驾驶证涉外：分项报价', o.includes('单号公证') && o.includes('海牙'), o);
+chk('驾驶证涉外：最低 599 元起', o.includes('599'), o);
+chk('驾驶证涉外：折扣口径', o.includes('9.5折') && o.includes('8.5折'), o);
+
 // 欢迎消息存在
 chk('欢迎消息渲染', ($('#msgs').children||[]).length > 8, '');
 

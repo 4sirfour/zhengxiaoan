@@ -32,7 +32,8 @@ DATA = {
     "platform": K.PLATFORM,
     "official": O.OFFICIAL,
     "quotesLite": [{"prov": q["prov"], "way": q["way"], "tr": q["tr"],
-                    "period": q["period"], "periodAuth": q["periodAuth"]} for q in K.QUOTES],
+                    "period": q["period"], "periodAuth": q["periodAuth"],
+                    "d": q["d"], "s": q["s"], "dh": q["dh"], "sh": q["sh"]} for q in K.QUOTES],
     # 涉外国家判定：外交部《公约》缔约国名单（127 国）+ 别名归一表
     "hague": HG.HAGUE_MEMBERS_CN,
     "hagueAlias": HG.HAGUE_ALIAS,
@@ -278,6 +279,14 @@ function countryText(countries){
         + "通常需办【领事认证（使馆认证，即双认证）】：公证 → 外交部/地方外办认证 → "
         + `使用国驻华使领馆认证。若该国近期已加入公约，以使用地机构口径为准。`);
     }
+  }
+  const qs = KB.quotesLite || [];
+  if(qs.length){
+    const lo = k => Math.min(...qs.map(x=>x[k]));
+    L.push("  · 涉外参考价（C端对外价，各省有差异）：单号公证 " + lo('d')
+      + " 元起 · 单号+海牙 " + lo('dh') + " 元起 · 双号公证 " + lo('s')
+      + " 元起 · 双号+海牙 " + lo('sh') + " 元起（分项计价，公证费与海牙认证分开算；"
+      + "C端销售主管可9.5折，B端在此基础上可8.5折）");
   }
   L.push("");
   L.push("（依据：中国领事服务网（外交部）《公约》缔约国名单，共 127 个缔约国；"

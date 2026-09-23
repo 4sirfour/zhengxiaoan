@@ -232,6 +232,35 @@ def period_note():
     return "【办理周期 · 来源：知识库各省报价表】\n- " + "\n- ".join(lines)
 
 
+def quotes_price_note(for_model=False):
+    """涉外公证分项报价（各省报价表 C 端对外价）。
+
+    for_model=True  → 注入 prompt，末尾附「回答要求」指令行；
+    for_model=False → 面向用户的确定性兜底文本（不含指令行）。
+    """
+    if not K.QUOTES:
+        return ""
+    lo = lambda k: min(q[k] for q in K.QUOTES)
+    hi = lambda k: max(q[k] for q in K.QUOTES)
+    lines = [
+        f"公证费 · c端单号公证：全国最低 {lo('d')} 元起（各省 {lo('d')}-{hi('d')} 元）",
+        f"公证费 · c端双号公证（中文原件+译文均公证）：各省 {lo('s')}-{hi('s')} 元",
+        f"单号公证+海牙认证（Apostille）：各省 {lo('dh')}-{hi('dh')} 元",
+        f"双号公证+海牙认证：各省 {lo('sh')}-{hi('sh')} 元",
+        "翻译方式（翻译自带/公证处翻译）与公证方式（扫码签字/委托书/不用配合）按省而定",
+        "折扣口径：C 端销售主管可打 9.5 折；B 端在此基础上可打 8.5 折，低于 8.5 折需请示上级领导",
+    ]
+    if for_model:
+        lines.append("回答要求：当事人问涉外事项价格时，必须按「公证费（单号/双号）+ 海牙认证」分项列出，"
+                     "给出最低价并注明各省有差异；严禁合并成一个笼统总价")
+    return "【涉外公证分项报价 · 来源：知识库各省报价表（C 端对外价）】\n- " + "\n- ".join(lines)
+
+
+# 涉外语境词：问题含这些词（或识别到国家）即视为涉外咨询，注入分项报价
+OVERSEAS_PRICE_WORDS = ("海牙", "认证", "单号", "双号", "翻译", "涉外",
+                        "出国", "国外", "境外", "领事", "使馆", "apostille", "Apostille")
+
+
 # ==================== 涉外国家判定（单号/双号 · 是否必须海牙） ====================
 # 用户问「去某国的公证」时，需回答两件事：
 #   ① 该国通常做单号还是双号；② 是否必须办海牙认证（Apostille）。
@@ -728,6 +757,16 @@ SYSTEM = """你是「证小安」公证业务知识库助手。你的职责不�
    相关「网络检索结果」，按其作答；检索未果时，如实说明**未能确认**，
    给出较可能的判断方向，并提示**以使用地收件机构及公证处最终口径为准**。
 4. 严禁因为知识库没有收录就跳过这两点不答，也不得编造确定性的结论。
+
+【涉外公证 · 分项报价（重要 · 必须逐项列出）】
+- 当事人问涉外事项价格时，回答中必须**逐项列出以下四项**（数据取「涉外公证分项报价」块），严禁合并成一个笼统总价，也严禁只报公证费不报海牙价：
+  1. 公证费（单号）：全国最低 599 元起（各省 599-799 元）
+  2. 公证费（双号，中文原件+译文均公证）：各省 699-1299 元
+  3. 单号公证+海牙认证：各省 999-1899 元
+  4. 双号公证+海牙认证：各省 1199-1999 元
+- 并注明：各省有差异、翻译方式（翻译自带/公证处翻译）与公证方式按省而定；周期：公证 3-5 个工作日，公证+认证 10-15 个工作日。
+- 折扣口径必须带上：C 端销售主管可打 9.5 折；B 端在此基础上可打 8.5 折，低于 8.5 折需请示上级领导。
+- 若当事人未指定省份，按「全国最低价」口径报价并注明以具体省份为准。
 
 【知识库内容 vs 补充内容 · 必须区分标注】
 - 命中知识库时，知识库已有内容作为主答案，标注条目编号。
@@ -1693,6 +1732,11 @@ class H(BaseHTTPRequestHandler):
             mismatch_block = ("\n\n" + mismatch_note) if mismatch_note else ""
             # 问「要几天/多久」时把各省报价表的周期数据注入上下文（知识库内容）
             pn_block = ("\n\n" + pn) if pn else ""
+            # 涉外语境（识别到国家或含涉外词）时注入分项报价：公证费/海牙分列 + 折扣口径
+            overseas_ctx = bool(countries) or any(w in q for w in OVERSEAS_PRICE_WORDS)
+            qp = quotes_price_note(for_model=True) if overseas_ctx else ""
+            qp_user = quotes_price_note(for_model=False) if overseas_ctx else ""
+            qp_block = ("\n\n" + qp) if qp else ""
             # 涉外国家判定：注入结论段 + 强制要求模型必须回答这两项
             country_block = ("\n\n" + country_note) if country_note else ""
             country_req = ""
@@ -1722,7 +1766,7 @@ class H(BaseHTTPRequestHandler):
             if missing:
                 ask = "、".join(missing)
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{rel_block}{mismatch_block}{web_block}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{qp_block}{rel_block}{mismatch_block}{web_block}\n\n"
                         f"【知识库全部事项目录】\n{kb_catalog()}\n\n"
                         f"【四要素核对结果】\n"
                         f"- 当事人已明确：{'、'.join(have) if have else '（无）'}\n"
@@ -1738,7 +1782,7 @@ class H(BaseHTTPRequestHandler):
                         f"{gap_note}")
             else:
                 user = (f"当事人提问：{q}\n\n"
-                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{rel_block}{mismatch_block}{web_block}\n\n"
+                        f"知识库检索到的相关条目：\n{build_context(hits)}{pn_block}{country_block}{qp_block}{rel_block}{mismatch_block}{web_block}\n\n"
                         f"【四要素核对结果】\n办什么公证、户籍在哪儿、在哪儿使用、用途是什么 —— 四项均已明确。\n\n"
                         f"请直接按「结论 → 依据 → 办理要素 → 材料清单 → 价格与时长 → 下一步」"
                         f"的结构给出完整分析，不要再追问任何要素。若涉及涉外，说明是否需要海牙认证。"
@@ -1826,6 +1870,16 @@ class H(BaseHTTPRequestHandler):
             if country_note and not ("海牙" in ans or "Apostille" in ans
                                      or "领事认证" in ans or "双认证" in ans):
                 ans += "\n\n——\n" + country_note
+
+            # 分项报价的确定性兜底：涉外语境 + 问价时，必须给出四项分项价
+            # （单号公证/双号公证/单号+海牙/双号+海牙）。模型若未列全
+            # （缺少区间数字或未区分单双号），由系统强制附上标准分项报价。
+            if qp and _is_price_q(q):
+                itemized = ("999" in ans or "1899" in ans or "1199" in ans) \
+                            and ("单号" in ans and "双号" in ans) \
+                            and ("海牙" in ans)
+                if not itemized:
+                    ans += "\n\n——\n" + qp_user
 
             # 虚假来源兜底：本次并未取得任何检索结果（无官方清单、无网络结果）时，
             # 模型若仍写了「根据网络检索/检索结果显示」等，属虚构来源，系统补正说明。
